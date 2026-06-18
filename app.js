@@ -18,7 +18,7 @@
 /* ═══════════════ 1. CONFIG & CONSTANTS ═══════════════ */
 const APP_CONFIG = {
   // Paste your Apps Script Web App URL here (see Code.gs setup notes).
-  APPS_URL: "https://script.google.com/macros/s/AKfycbyqIpC_0XIDCFnW4mv5Sv2Eze274O6Se0sISysBPScVhlBTplDOUl7gom4I6NCimgo16A/exec",
+  APPS_URL: "https://script.google.com/macros/s/AKfycbyzqb3p9yNT28ZStunxql9sJg5_bXmL8uKeq5X_qgMqQC7VPDv2Gt1ZV-2YyQgIqbjw-A/exec",
   SESSION_DAYS: 30
 };
 const APPS = APP_CONFIG.APPS_URL;
