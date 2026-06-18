@@ -248,7 +248,7 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 @keyframes ti{from{opacity:0;transform:translateY(7px) scale(.96)}to{opacity:1;transform:none}}
 @keyframes to{to{opacity:0;transform:translateY(4px)}}
 /* ── MODAL ── */
-.mbg{position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.65);align-items:center;justify-content:center;padding:1rem;display:none}
+.mbg{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.78);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:1rem;display:none}
 .mbg.show{display:flex}
 .mbox{background:var(--surf);border:1px solid var(--bd2);border-radius:var(--r4);max-width:560px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:var(--sh2);animation:mi .2s ease}
 @keyframes mi{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
