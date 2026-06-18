@@ -1299,3 +1299,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('lu')?.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('lp').focus(); });
   document.getElementById('lp')?.addEventListener('keydown', e=>{ if(e.key==='Enter') AUTH.login(); });
 });
+
+/* ═══════════════ EXPLICIT GLOBAL EXPOSURE ═══════════════
+   index.html calls these via inline onclick="X.method()" attributes.
+   Top-level `const X = {...}` does NOT reliably attach X to `window`
+   in all execution contexts — this caused inline onclick handlers to
+   silently fail to find X (e.g. "ADMIN is not defined" at click-time)
+   even though typing X directly in the console worked fine. Explicitly
+   assigning each object to window guarantees inline onclick attributes
+   can always resolve them. */
+window.AUTH = AUTH;
+window.ADMIN = ADMIN;
+window.UI = UI;
+window.SB = SB;
+window.ON = ON;
+window.LOC = LOC;
+window.PSY = PSY;
+window.REV = REV;
+window.QUIZ = QUIZ;
+window.PWA = PWA;
+window.PROG = PROG;
+window.HOME = HOME;
+window.TT = TT;
+window.CACHE = CACHE;
+window.DATA = DATA;
