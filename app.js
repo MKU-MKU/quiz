@@ -378,7 +378,8 @@ const UI = {
       bookmarks:()=>REV.renderList('bk'),
       flagged:()=>REV.renderList('fl'),
       wrong:()=>REV.renderList('wr'),
-      timetable:()=>TT.render()
+      timetable:()=>TT.render(),
+      psycho:()=>PSY.init()
     })[v]?.();
   },
   sidebarToggle(){
@@ -499,36 +500,38 @@ const LOC = {
 
 /* ═══════════════ 8d. PSYCHO MODE ═══════════════ */
 const PSY = {
-  onLv(){
-    const lv=document.getElementById('psy-lv').value;
-    const cl=document.getElementById('psy-chl');
-    cl.innerHTML='';
-    if(!lv){cl.innerHTML='<div class="empty"><div class="empty-i">📚</div><p>Select a level</p></div>';return}
-    const names=ChapterData.chapters(lv);
-    Object.entries(names).forEach(([k,n])=>{
-      const fc=ChapterData.fileCount(lv,k);
-      cl.innerHTML+=`<div class="ch-item" onclick="this.querySelector('input').click()">
-        <input type="checkbox" value="${k}" data-lv="${lv}" ${fc?'':'disabled'} onclick="event.stopPropagation();PSY._info()">
-        <div class="ch-num">${k}</div>
-        <div class="ch-name">${n}${fc?'':' <span style=\"color:var(--t3)\">(no files)</span>'}</div>
-        <div class="ch-cnt">${fc}f</div>
-      </div>`;
-    });
+  LEVELS:[['level5','Level 5'],['level7','Level 7'],['gk','General Knowledge']],
+  init(){
+    const box=document.getElementById('psy-levels');
+    box.innerHTML = PSY.LEVELS.map(([lv,label])=>{
+      const names=ChapterData.chapters(lv);
+      const items=Object.entries(names).map(([k,n])=>{
+        const fc=ChapterData.fileCount(lv,k);
+        return `<div class="ch-item" onclick="this.querySelector('input').click()">
+          <input type="checkbox" value="${k}" data-lv="${lv}" ${fc?'':'disabled'} onclick="event.stopPropagation();PSY._info()">
+          <div class="ch-num">${k}</div>
+          <div class="ch-name">${n}${fc?'':' <span style=\"color:var(--t3)\">(no files)</span>'}</div>
+          <div class="ch-cnt">${fc}f</div>
+        </div>`;
+      }).join('');
+      return `<div class="sb-lbl" style="margin-top:.7rem">${label}</div>
+        <div class="ch-list">${items || '<div class="empty"><div class="empty-i">📚</div><p>No chapters yet</p></div>'}</div>`;
+    }).join('');
     PSY._info();
   },
-  all(){document.querySelectorAll('#psy-chl input:not(:disabled)').forEach(c=>c.checked=true);PSY._info()},
-  none(){document.querySelectorAll('#psy-chl input').forEach(c=>c.checked=false);PSY._info()},
+  all(){document.querySelectorAll('#psy-levels input:not(:disabled)').forEach(c=>c.checked=true);PSY._info()},
+  none(){document.querySelectorAll('#psy-levels input').forEach(c=>c.checked=false);PSY._info()},
   _info(){
-    const n=document.querySelectorAll('#psy-chl input:checked').length;
+    const n=document.querySelectorAll('#psy-levels input:checked').length;
     document.getElementById('psy-info').textContent=n?`${n} chapter${n>1?'s':''} selected — ready to load`:'Select at least 1 chapter to continue';
   },
   async start(type){
-    const lv=document.getElementById('psy-lv').value;
-    const cbs=[...document.querySelectorAll('#psy-chl input:checked')];
+    const cbs=[...document.querySelectorAll('#psy-levels input:checked')];
     if(!cbs.length){toast('Select at least one chapter');return}
     toast(`⏳ Loading ${cbs.length} chapter${cbs.length>1?'s':''}…`);
     const all=[];
     for(const cb of cbs){
+      const lv=cb.dataset.lv;
       const ch=cb.value;
       for(const[name,fid] of Object.entries(ChapterData.files(lv,ch))){
         if(!fid)continue;
@@ -725,9 +728,11 @@ const QUIZ = {
     document.getElementById('fc-qt').textContent = q.q;
 
     const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
+    const gq = encodeURIComponent(q.q.slice(0,120));
     document.getElementById('fc-acts').innerHTML = `
-      <button class="ib ${isStarred?'starred':''}" onclick="QUIZ._star()">⭐</button>
-      <button class="ib ${isFlagged?'flagged':''}" onclick="QUIZ._flag()">🚩</button>
+      <button class="ib ${isStarred?'starred':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
+      <button class="ib ${isFlagged?'flagged':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
+      <a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none">🔍</a>
     `;
 
     const ansIdx = S.quiz.ans[S.quiz.idx];
@@ -809,9 +814,11 @@ const QUIZ = {
     document.getElementById('ex-ctr').textContent = `0/${S.quiz.qs.length}`;
     document.getElementById('ex-tmr').textContent = fmt(S.quiz.left);
     const el = document.getElementById('ex-qs');
-    el.innerHTML = S.quiz.qs.map((q,qi)=>`
+    el.innerHTML = S.quiz.qs.map((q,qi)=>{
+      const gq = encodeURIComponent(q.q.slice(0,120));
+      return `
       <div class="eqc" id="eqc-${qi}">
-        <div class="qm"><span class="qn mono">Q${qi+1}</span></div>
+        <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px">🔍</a></div>
         <div class="qt" style="font-size:.85rem">${esc(q.q)}</div>
         ${q.options.map((opt,oi)=>`
           <div class="eo" onclick="QUIZ.exAnswer(${qi},${oi})" id="eo-${qi}-${oi}">
@@ -819,7 +826,7 @@ const QUIZ = {
           </div>
         `).join('')}
       </div>
-    `).join('');
+    `}).join('');
   },
   exAnswer(qi, oi){
     if(!S.quiz.active)return;
@@ -1080,22 +1087,49 @@ const TT = {
     tick();
     TT._clockTimer=setInterval(tick,1000);
 
+    // Today's sessions
     const todayDay = new Date().getDay();
     const todaySessions = S.tt.sessions.filter(s=>s.day===todayDay).sort((a,b)=>a.start.localeCompare(b.start));
     const todayEl = document.getElementById('tt-today');
     todayEl.innerHTML = todaySessions.length ? todaySessions.map(s=>`
-      <div class="tt-row"><div class="tt-ti">${s.start}-${s.end}</div><div class="tt-na">${esc(s.name)}</div>
-        <button class="ib" onclick="TT.remove('${s.id}')">🗑</button></div>
+      <div class="tt-row">
+        <div class="tt-ti">${s.start}–${s.end}</div>
+        <div class="tt-na">${esc(s.name)}</div>
+        <button class="ib" onclick="TT.remove('${s.id}')">🗑</button>
+      </div>
     `).join('') : '<div class="empty"><div class="empty-i">📅</div><p>Nothing scheduled today</p></div>';
 
+    // Full week calendar grid
     const weekEl = document.getElementById('tt-week');
-    weekEl.innerHTML = DAYS.map((dname,di)=>{
-      const sess = S.tt.sessions.filter(s=>s.day===di).sort((a,b)=>a.start.localeCompare(b.start));
-      return `<div style="margin-bottom:.6rem"><div style="font-weight:700;font-size:.74rem;color:var(--t2);margin-bottom:.2rem">${dname}</div>
-        ${sess.length?sess.map(s=>`<div class="tt-row"><div class="tt-ti">${s.start}-${s.end}</div><div class="tt-na">${esc(s.name)}</div>
-          <button class="ib" onclick="TT.remove('${s.id}')">🗑</button></div>`).join(''):'<div style="font-size:.7rem;color:var(--t3);padding:.3rem 0">—</div>'}
-      </div>`;
-    }).join('');
+    const today = new Date().getDay();
+    weekEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:.5rem">
+        ${DAYS.map((d,i)=>`
+          <div style="text-align:center;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+            color:${i===today?'var(--neon)':'var(--t3)'};
+            padding:.3rem .2rem;
+            border-bottom:2px solid ${i===today?'var(--neon)':'var(--bd)'}">
+            ${d.slice(0,3)}
+          </div>
+        `).join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;align-items:start">
+        ${DAYS.map((d,di)=>{
+          const sess = S.tt.sessions.filter(s=>s.day===di).sort((a,b)=>a.start.localeCompare(b.start));
+          const isToday = di===today;
+          return `<div style="min-height:60px;background:${isToday?'rgba(0,229,255,.04)':'var(--bg1)'};border-radius:var(--r1);border:1px solid ${isToday?'rgba(0,229,255,.18)':'var(--bd)'};padding:.3rem .25rem">
+            ${sess.length ? sess.map(s=>`
+              <div style="background:${isToday?'rgba(0,229,255,.1)':'var(--surf2)'};border:1px solid ${isToday?'rgba(0,229,255,.25)':'var(--bd)'};border-radius:6px;padding:.28rem .35rem;margin-bottom:3px;cursor:default"
+                title="${esc(s.name)} ${s.start}–${s.end}">
+                <div style="font-size:.6rem;font-weight:700;color:${isToday?'var(--neon)':'var(--t3)'}">${s.start}</div>
+                <div style="font-size:.65rem;font-weight:600;color:var(--t1);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(s.name)}</div>
+                <button onclick="TT.remove('${s.id}')" style="background:none;border:none;color:var(--t3);font-size:.65rem;cursor:pointer;padding:0;float:right">✕</button>
+              </div>
+            `).join('') : `<div style="text-align:center;color:var(--t3);font-size:.6rem;margin-top:.5rem">—</div>`}
+          </div>`;
+        }).join('')}
+      </div>
+    `;
   },
   renderCurrentSessionWidget(elId){
     const el=document.getElementById(elId);

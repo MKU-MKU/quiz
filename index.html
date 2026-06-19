@@ -97,8 +97,11 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
  #ov{display:none;position:fixed;inset:0;z-index:399;background:rgba(0,0,0,.55)}
  #ov.show{display:block}
  #main{padding:.9rem .7rem}
+ #uchip{display:none}
+ .sb-close{display:flex}
 }
 /* ── SIDEBAR ── */
+.sb-close{display:none;align-items:center;justify-content:center;width:36px;height:36px;margin:0 0 .9rem auto;background:var(--surf2);border:1px solid var(--bd);border-radius:var(--r1);color:var(--t2);font-size:1.05rem;cursor:pointer}
 .sb-sec{margin-bottom:1.4rem}
 .sb-lbl{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:1.3px;color:var(--t3);padding:0 .45rem;margin-bottom:.35rem}
 .sb-item{display:flex;align-items:center;gap:.55rem;padding:.5rem .6rem;border-radius:var(--r1);font-size:.8rem;font-weight:600;color:var(--t2);cursor:pointer;transition:all var(--ease);margin-bottom:1px;border:1px solid transparent}
@@ -341,6 +344,7 @@ input[type=file]:hover{border-color:var(--neon)}
   <div id="ov" onclick="UI.sidebarClose()"></div>
   <!-- ═══ SIDEBAR ═══ -->
   <div id="sb">
+   <button class="sb-close" onclick="UI.sidebarClose()" aria-label="Close menu">✕</button>
    <div class="sb-sec">
     <div class="sb-lbl">Study</div>
     <div class="sb-item active" id="nav-home" onclick="UI.go('home')"><div class="sb-ic">🏠</div>Dashboard</div>
@@ -446,13 +450,12 @@ input[type=file]:hover{border-color:var(--neon)}
      <div><div style="font-size:.95rem;font-weight:800;color:var(--neon2)">Psycho Mode</div><div style="font-size:.73rem;color:var(--t3);margin-top:.2rem">Mix chapters · exam pressure · weak-area targeting · built for crunch time.</div></div>
     </div>
     <div class="card">
-     <div class="card-hd"><h3>Level & Chapters</h3><span class="ctag tp">Multi-chapter</span></div>
-     <select class="sel-c" id="psy-lv" onchange="PSY.onLv()"><option value="">Select Level…</option><option value="level5">Level 5</option><option value="level7">Level 7</option><option value="gk">General Knowledge</option></select>
-     <div class="bg" style="margin:.4rem 0">
+     <div class="card-hd"><h3>Levels & Chapters</h3><span class="ctag tp">Multi-level · Multi-chapter</span></div>
+     <div class="bg" style="margin-bottom:.6rem">
       <button class="btn btn-sm btn-c" onclick="PSY.all()">✅ Select All</button>
       <button class="btn btn-sm btn-r" onclick="PSY.none()">✕ Clear</button>
      </div>
-     <div class="ch-list" id="psy-chl"><div class="empty"><div class="empty-i">📚</div><p>Select a level first</p></div></div>
+     <div id="psy-levels"></div>
      <div id="psy-info" style="font-size:.7rem;color:var(--t3);text-align:center;margin:.4rem 0"></div>
      <hr>
      <div class="g2" style="margin-bottom:.45rem">
