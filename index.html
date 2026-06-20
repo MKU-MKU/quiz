@@ -12,21 +12,21 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-/* ════════════════════════════════════════════════════
-   DESIGN TOKENS
-════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════════ */
 :root{
-  --bg0:#07090f;--bg1:#0d1120;--bg2:#131929;--bg3:#1a2236;
+  --bg0:#07090f;--bg1:#0d1120;--bg2:#131929;
   --surf:#1e2840;--surf2:#253050;--surf3:#2c3a5c;
   --bd:#2a3652;--bd2:#3a4d72;
   --neon:#00e5ff;--neon2:#7c3aed;--neon3:#10b981;--neon4:#f59e0b;--neon5:#ef4444;
-  --ng:0 0 20px rgba(0,229,255,.3);
   --t1:#f0f4ff;--t2:#8fa3c8;--t3:#4a6080;
-  --ok:#10b981;--ok-bg:rgba(16,185,129,.12);--ok-bd:rgba(16,185,129,.4);
+  --ok:#10b981;--ok-bg:rgba(16,185,129,.13);--ok-bd:rgba(16,185,129,.4);
   --bad:#ef4444;--bad-bg:rgba(239,68,68,.12);--bad-bd:rgba(239,68,68,.4);
-  --warn:#f59e0b;--warn-bg:rgba(245,158,11,.1);--warn-bd:rgba(245,158,11,.35);
+  --warn:#f59e0b;--warn-bg:rgba(245,158,11,.1);--warn-bd:rgba(245,158,11,.38);
   --r1:8px;--r2:14px;--r3:20px;--r4:28px;
   --sh1:0 4px 24px rgba(0,0,0,.45);--sh2:0 8px 40px rgba(0,0,0,.6);
+  --ng:0 0 20px rgba(0,229,255,.3);
   --ff:'Plus Jakarta Sans',system-ui,sans-serif;
   --fm:'JetBrains Mono',monospace;
   --ease:.18s cubic-bezier(.4,0,.2,1);
@@ -34,24 +34,23 @@
   --safe-b:env(safe-area-inset-bottom,0px);
 }
 .light{
-  --bg0:#eef2f8;--bg1:#e4eaf5;--bg2:#d8e0f0;--bg3:#ccd5e8;
+  --bg0:#eef2f8;--bg1:#e4eaf5;--bg2:#d8e0f0;
   --surf:#fff;--surf2:#f0f4fb;--surf3:#e4ecf8;
   --bd:#c8d4e8;--bd2:#b0c2dc;
   --t1:#0d1a2e;--t2:#3a5070;--t3:#7a95b5;
   --neon:#0077aa;--neon2:#6d28d9;--neon3:#059669;--neon4:#d97706;--neon5:#dc2626;
-  --ng:0 0 16px rgba(0,119,170,.2);
   --sh1:0 4px 20px rgba(0,0,0,.08);--sh2:0 8px 36px rgba(0,0,0,.12);
 }
 
-/* ════ RESET ════ */
+/* ══ RESET ══ */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
-body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden;transition:background var(--ease),color var(--ease);-webkit-font-smoothing:antialiased}
+body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background var(--ease),color var(--ease)}
 ::-webkit-scrollbar{width:3px;height:3px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:3px}
 
-/* ════ LOGIN ════ */
+/* ══ LOGIN ══ */
 #lw{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg0);overflow-y:auto}
 .l-bg{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(124,58,237,.18),transparent 70%),radial-gradient(ellipse 60% 40% at 20% 100%,rgba(0,229,255,.1),transparent 60%)}
 .l-grid{position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(var(--bd) 1px,transparent 1px),linear-gradient(90deg,var(--bd) 1px,transparent 1px);background-size:40px 40px;opacity:.15}
@@ -80,13 +79,13 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .l-admin-link{text-align:center;margin-top:.8rem}
 .l-admin-link button{background:none;border:none;color:var(--t3);font-size:.68rem;cursor:pointer;font-family:var(--ff);text-decoration:underline}
 
-/* ════ APP SHELL ════ */
+/* ══ APP SHELL ══ */
 #app{display:none;flex-direction:column;min-height:100vh}
 #app.on{display:flex}
 .off-bar{background:linear-gradient(90deg,#7c1d1d,#991b1b);color:#fff;text-align:center;font-size:.72rem;font-weight:700;padding:.35rem;display:none}
 .off-bar.show{display:block}
 
-/* ════ TOPBAR ════ */
+/* ══ TOPBAR ══ */
 #tb{height:54px;background:rgba(13,17,32,.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;padding:0 1rem;position:sticky;top:0;z-index:500;flex-shrink:0}
 .light #tb{background:rgba(238,242,248,.96)}
 .tb-brand{display:flex;align-items:center;gap:.5rem;font-size:.95rem;font-weight:800;letter-spacing:-.3px;cursor:pointer;color:var(--t1);user-select:none}
@@ -99,46 +98,31 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .uchip{background:var(--surf2);border:1px solid var(--bd);border-radius:30px;padding:.28rem .75rem;font-size:.7rem;font-weight:700;color:var(--t2);display:flex;align-items:center;gap:.3rem}
 @media(max-width:600px){.uchip{display:none}}
 
-/* ════ LAYOUT ════ */
+/* ══ LAYOUT ══ */
 #layout{display:flex;flex:1;min-height:0;overflow:hidden}
 #sb{width:256px;flex-shrink:0;background:var(--bg1);border-right:1px solid var(--bd);overflow-y:auto;padding:.9rem .65rem;transition:transform var(--ease),background var(--ease)}
-#main{flex:1;overflow-y:auto;padding:1.1rem 1rem calc(var(--bnav) + var(--safe-b) + .5rem)}
+#main{flex:1;overflow-y:auto;padding:1rem calc(var(--bnav)+var(--safe-b)+.5rem) 1rem 1rem}
 
 @media(max-width:900px){
   #sb{position:fixed;left:0;top:54px;bottom:0;z-index:400;transform:translateX(-100%);width:272px}
   #sb.open{transform:translateX(0);box-shadow:var(--sh2)}
   #ov{display:none;position:fixed;inset:0;z-index:399;background:rgba(0,0,0,.55)}
   #ov.show{display:block}
-  #main{padding:.85rem .7rem calc(var(--bnav) + var(--safe-b) + .5rem)}
+  #main{padding:.85rem .7rem calc(var(--bnav)+var(--safe-b)+.5rem)}
 }
 
-/* ════ BOTTOM NAV — MOBILE ════ */
-#bnav{
-  display:none;
-  position:fixed;bottom:0;left:0;right:0;z-index:450;
-  background:rgba(13,17,32,.97);
-  backdrop-filter:blur(20px) saturate(1.6);
-  -webkit-backdrop-filter:blur(20px) saturate(1.6);
-  border-top:1px solid var(--bd);
-  padding-bottom:var(--safe-b);
-}
+/* ══ BOTTOM NAV ══ */
+#bnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:450;background:rgba(13,17,32,.97);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--bd);padding-bottom:var(--safe-b)}
 .light #bnav{background:rgba(238,242,248,.97)}
 .bnav-row{display:flex;height:var(--bnav)}
-.bnav-btn{
-  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  cursor:pointer;background:none;border:none;font-family:var(--ff);
-  color:var(--t3);font-size:.56rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
-  transition:color var(--ease);position:relative;padding:.35rem .1rem;
-  -webkit-tap-highlight-color:transparent;
-}
+.bnav-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;background:none;border:none;font-family:var(--ff);color:var(--t3);font-size:.56rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;transition:color var(--ease);position:relative;padding:.35rem .1rem;-webkit-tap-highlight-color:transparent}
 .bnav-btn .bic{font-size:1.3rem;line-height:1;transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
 .bnav-btn.active{color:var(--neon)}
 .bnav-btn.active .bic{transform:scale(1.18)}
 .bnav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:24px;height:3px;background:linear-gradient(90deg,var(--neon2),var(--neon));border-radius:0 0 3px 3px}
-.bnav-badge{position:absolute;top:5px;right:calc(50% - 18px);background:var(--neon2);color:#fff;font-size:.5rem;font-weight:800;padding:.04rem .3rem;border-radius:20px;min-width:14px;text-align:center}
 @media(max-width:900px){#bnav{display:block}}
 
-/* ════ SIDEBAR ════ */
+/* ══ SIDEBAR ══ */
 .sb-close{display:none;align-items:center;justify-content:center;width:36px;height:36px;margin:0 0 .9rem auto;background:var(--surf2);border:1px solid var(--bd);border-radius:var(--r1);color:var(--t2);font-size:1.05rem;cursor:pointer}
 @media(max-width:900px){.sb-close{display:flex}}
 .sb-sec{margin-bottom:1.4rem}
@@ -153,7 +137,7 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .sel-c:focus{border-color:var(--neon);box-shadow:0 0 0 3px rgba(0,229,255,.1)}
 .sel-c option{background:var(--bg1)}
 
-/* ════ CARDS ════ */
+/* ══ CARDS ══ */
 .card{background:var(--surf);border:1px solid var(--bd);border-radius:var(--r3);padding:1.1rem;box-shadow:var(--sh1);margin-bottom:.9rem}
 .card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem;padding-bottom:.7rem;border-bottom:1px solid var(--bd)}
 .card-hd h3{font-size:.92rem;font-weight:700;display:flex;align-items:center;gap:.45rem}
@@ -161,9 +145,9 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .tc{background:rgba(0,229,255,.1);color:var(--neon)}.tp{background:rgba(124,58,237,.14);color:var(--neon2)}
 .tg{background:rgba(16,185,129,.11);color:var(--neon3)}.ta{background:rgba(245,158,11,.11);color:var(--neon4)}.tr{background:rgba(239,68,68,.11);color:var(--neon5)}
 
-/* ════ BUTTONS ════ */
+/* ══ BUTTONS ══ */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:.32rem;padding:.48rem .95rem;border-radius:var(--r1);font-size:.78rem;font-weight:700;font-family:var(--ff);cursor:pointer;border:1.5px solid transparent;transition:all var(--ease);white-space:nowrap;user-select:none}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+.btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-c{background:rgba(0,229,255,.09);color:var(--neon);border-color:rgba(0,229,255,.22)}
 .btn-c:hover:not(:disabled){background:var(--neon);color:var(--bg0);box-shadow:var(--ng)}
 .btn-p{background:rgba(124,58,237,.1);color:var(--neon2);border-color:rgba(124,58,237,.22)}
@@ -181,14 +165,14 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .btn-blk{width:100%;display:flex}
 .bg{display:flex;gap:.45rem;flex-wrap:wrap}
 
-/* ════ GRIDS ════ */
+/* ══ GRIDS ══ */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem}
 @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr 1fr}}
 @media(max-width:380px){.g3,.g4{grid-template-columns:1fr 1fr}}
 
-/* ════ STAT CARDS ════ */
+/* ══ STAT CARDS ══ */
 .sc{background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r2);padding:.9rem .7rem;text-align:center;position:relative;overflow:hidden}
 .sc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px}
 .sc.sc-c::after{background:var(--neon)}.sc.sc-g::after{background:var(--ok)}.sc.sc-r::after{background:var(--bad)}.sc.sc-a::after{background:var(--warn)}
@@ -196,7 +180,7 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .sl{font-size:.62rem;color:var(--t3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-top:.28rem}
 .tcy{color:var(--neon)}.tc2{color:var(--ok)}.tb2{color:var(--bad)}.ta2{color:var(--warn)}
 
-/* ════ VIEWS ════ */
+/* ══ VIEWS ══ */
 .view{display:none}
 .view.on{display:block;animation:vfade .15s ease}
 @keyframes vfade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
@@ -204,53 +188,36 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .ph h2{font-size:1.2rem;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:.4rem}
 .ph p{font-size:.78rem;color:var(--t2);margin-top:.2rem}
 
-/* ════ DASHBOARD ════ */
-.dash-greet{
-  background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(0,229,255,.06));
-  border:1px solid rgba(0,229,255,.14);
-  border-radius:var(--r3);padding:1rem 1.1rem;margin-bottom:.85rem;
-  display:flex;align-items:center;justify-content:space-between;gap:.7rem
-}
-.dash-greet-text h2{font-size:1.05rem;font-weight:800;letter-spacing:-.3px;
-  background:linear-gradient(90deg,var(--neon2),var(--neon));
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+/* ══ DASHBOARD ══ */
+.dash-greet{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(0,229,255,.06));border:1px solid rgba(0,229,255,.14);border-radius:var(--r3);padding:1rem 1.1rem;margin-bottom:.85rem;display:flex;align-items:center;justify-content:space-between;gap:.7rem}
+.dash-greet-text h2{font-size:1.05rem;font-weight:800;letter-spacing:-.3px;background:linear-gradient(90deg,var(--neon2),var(--neon));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .dash-greet-text p{font-size:.76rem;color:var(--t2);margin-top:.15rem}
 .dash-greet-icon{font-size:2.2rem;flex-shrink:0}
-
 .quick-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:.85rem}
-.qa-btn{background:var(--surf);border:1px solid var(--bd);border-radius:var(--r2);padding:.7rem .4rem;
-  display:flex;flex-direction:column;align-items:center;gap:.3rem;cursor:pointer;
-  transition:all .2s cubic-bezier(.34,1.56,.64,1);font-family:var(--ff);font-size:.65rem;
-  font-weight:700;color:var(--t2);text-align:center;border:none;background:var(--surf)}
+.qa-btn{background:var(--surf);border:1px solid var(--bd);border-radius:var(--r2);padding:.7rem .4rem;display:flex;flex-direction:column;align-items:center;gap:.3rem;cursor:pointer;transition:all .2s cubic-bezier(.34,1.56,.64,1);font-family:var(--ff);font-size:.65rem;font-weight:700;color:var(--t2);text-align:center}
 .qa-btn:hover{background:var(--surf2);transform:translateY(-2px);color:var(--t1);box-shadow:var(--sh1)}
 .qa-btn:active{transform:translateY(0)}
 .qa-btn .qa-ic{font-size:1.35rem}
-
-.daily-card{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(0,229,255,.06));
-  border:1.5px solid rgba(0,229,255,.18);border-radius:var(--r3);padding:1rem 1.1rem;margin-bottom:.85rem}
+.daily-card{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(0,229,255,.06));border:1.5px solid rgba(0,229,255,.18);border-radius:var(--r3);padding:1rem 1.1rem;margin-bottom:.85rem}
 .daily-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.65rem}
 .daily-top h3{font-size:.92rem;font-weight:800;display:flex;align-items:center;gap:.4rem}
-.stk-tag{background:linear-gradient(90deg,rgba(245,158,11,.2),rgba(239,68,68,.15));
-  border:1px solid rgba(245,158,11,.35);border-radius:20px;padding:.2rem .65rem;
-  font-size:.66rem;font-weight:800;color:var(--warn);display:flex;align-items:center;gap:.25rem}
-
-/* streak bar */
+.stk-tag{background:linear-gradient(90deg,rgba(245,158,11,.2),rgba(239,68,68,.15));border:1px solid rgba(245,158,11,.35);border-radius:20px;padding:.2rem .65rem;font-size:.66rem;font-weight:800;color:var(--warn);display:flex;align-items:center;gap:.25rem}
 .sk-bar{display:flex;gap:.35rem;margin-bottom:.65rem}
-.sk-d{flex:1;height:28px;border-radius:7px;background:var(--bg2);border:1px solid var(--bd);
-  display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;
-  color:var(--t3);transition:all var(--ease)}
+.sk-d{flex:1;height:28px;border-radius:7px;background:var(--bg2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:var(--t3);transition:all var(--ease)}
 .sk-d.done{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.3);color:var(--ok)}
 .sk-d.today{background:rgba(0,229,255,.1);border-color:rgba(0,229,255,.3);color:var(--neon)}
 .sk-d.done.today{background:rgba(16,185,129,.2);border-color:var(--ok);color:var(--ok)}
-
 .daily-desc{font-size:.74rem;color:var(--t2);margin-bottom:.75rem;line-height:1.5}
-.daily-btn{width:100%;padding:.75rem;background:linear-gradient(135deg,var(--neon2),var(--neon));
-  border:none;border-radius:var(--r2);color:#fff;font-size:.9rem;font-weight:800;
-  font-family:var(--ff);cursor:pointer;transition:all var(--ease);
-  box-shadow:0 4px 20px rgba(0,229,255,.25);display:flex;align-items:center;justify-content:center;gap:.4rem}
+.daily-btn{width:100%;padding:.75rem;background:linear-gradient(135deg,var(--neon2),var(--neon));border:none;border-radius:var(--r2);color:#fff;font-size:.9rem;font-weight:800;font-family:var(--ff);cursor:pointer;transition:all var(--ease);box-shadow:0 4px 20px rgba(0,229,255,.25);display:flex;align-items:center;justify-content:center;gap:.4rem}
 .daily-btn:hover{transform:translateY(-1px);box-shadow:0 6px 28px rgba(0,229,255,.38)}
+.sess-row{display:flex;align-items:center;padding:.48rem 0;border-bottom:1px solid var(--bd);gap:.5rem}
+.sess-row:last-child{border:none}
+.sess-ic{font-size:.95rem;flex-shrink:0}
+.sess-info{flex:1;min-width:0}
+.sess-ch{font-weight:700;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sess-ts{color:var(--t3);font-size:.66rem;margin-top:.06rem}
 
-/* ════ CHAPTER LIST ════ */
+/* ══ CHAPTER LIST ══ */
 .ch-list{max-height:260px;overflow-y:auto;margin:.45rem 0}
 .ch-item{display:flex;align-items:center;gap:.55rem;padding:.38rem .45rem;border-radius:var(--r1);margin-bottom:2px;cursor:pointer;transition:background var(--ease)}
 .ch-item:hover{background:var(--surf2)}
@@ -258,128 +225,176 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .ch-num{width:20px;height:20px;border-radius:6px;background:var(--bg1);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:700;color:var(--t3);flex-shrink:0}
 .ch-name{font-size:.76rem;font-weight:600;flex:1;color:var(--t2)}
 .ch-cnt{font-size:.6rem;color:var(--t3);font-family:var(--fm)}
+.psy-hero{background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(0,229,255,.08));border:1px solid rgba(124,58,237,.28);border-radius:var(--r3);padding:.9rem 1rem;margin-bottom:.8rem;display:flex;align-items:center;gap:.85rem}
+.psy-hero-ic{font-size:1.9rem}
+.psy-hero-text h4{font-size:.92rem;font-weight:800;color:var(--neon2)}
+.psy-hero-text p{font-size:.72rem;color:var(--t3);margin-top:.15rem;line-height:1.5}
 
-/* ════════════════════════════════════════════════════
-   QUIZ BAR — YOUR SKETCH IMPLEMENTED
-   ────────────────────────────────────────────────────
-   Structure:
-     Row 1: ──────── CHAPTER NAME ────────
-     Row 2: [1/100 | ✓Finish] [✓□ ✗□ ↦□] [00:26 | ✗Quit]
-     Row 3: progress bar
-════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   QUIZ BAR — EXACTLY YOUR 3-LINE SKETCH
+   ═══════════════════════════════════════════════════════════
+   LINE 1: ┌─────────── Soil Mechanics ─────────────┐
+   LINE 2: │ 1/100  ✔Finish │ [✓][✗][↦] │ 00:26  ✕Quit │
+   LINE 3: └──── progress bar + ratio bar ──────────┘
+   ═══════════════════════════════════════════════════════════ */
+
+/* outer container */
 .qbar{
-  background:var(--surf);
-  border:1px solid var(--bd);
-  border-radius:var(--r3);
-  margin-bottom:.8rem;
   position:sticky;top:4px;z-index:100;
-  box-shadow:var(--sh2);
+  border-radius:16px;
   overflow:hidden;
+  box-shadow:0 6px 28px rgba(0,0,0,.55),0 0 0 1px rgba(0,229,255,.08);
+  margin-bottom:.85rem;
+  border:1px solid var(--bd2);
+  background:var(--bg1);
 }
 
-/* Row 1 — chapter title strip */
-.qbar-title{
-  text-align:center;
-  font-size:.78rem;font-weight:800;letter-spacing:.3px;
+/* ─── LINE 1: topic title strip ─── */
+.qb-l1{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:.5rem;
+  padding:.35rem .85rem;
+  min-height:31px;
+  background:linear-gradient(90deg,rgba(124,58,237,.24) 0%,rgba(0,229,255,.14) 50%,rgba(124,58,237,.24) 100%);
+  border-bottom:1px solid rgba(0,229,255,.13);
+}
+.qb-mode-pill{
+  flex-shrink:0;
+  background:rgba(0,229,255,.15);
+  border:1px solid rgba(0,229,255,.32);
+  border-radius:30px;
+  padding:.13rem .5rem;
+  font-size:.58rem;font-weight:800;
+  text-transform:uppercase;letter-spacing:.7px;
+  color:var(--neon);
+  white-space:nowrap;
+}
+.qb-topic{
+  font-size:.79rem;font-weight:800;
   color:var(--t1);
-  background:linear-gradient(90deg,rgba(124,58,237,.18),rgba(0,229,255,.1),rgba(124,58,237,.18));
-  border-bottom:1px solid var(--bd);
-  padding:.42rem .8rem;
-  display:flex;align-items:center;justify-content:center;gap:.4rem;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.qbar-title .qbar-mode-badge{
-  font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;
-  background:rgba(0,229,255,.12);border:1px solid rgba(0,229,255,.25);
-  color:var(--neon);border-radius:20px;padding:.1rem .45rem;flex-shrink:0
+  max-width:60vw;
+  letter-spacing:-.1px;
 }
 
-/* Row 2 — three-column action row */
-.qbar-body{
+/* ─── LINE 2: three-zone row — exactly the sketch ─── */
+.qb-l2{
   display:grid;
   grid-template-columns:1fr auto 1fr;
-  align-items:center;
-  padding:.55rem .75rem;
-  gap:.5rem;
-}
-
-/* Left zone: counter + finish */
-.qbar-left{display:flex;flex-direction:column;align-items:flex-start;gap:.28rem}
-.qbar-ctr{font-family:var(--fm);font-size:.85rem;font-weight:700;color:var(--t1);letter-spacing:.5px}
-.qbar-finish{display:flex;align-items:center;gap:.25rem;
-  background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);
-  color:var(--ok);border-radius:var(--r1);padding:.28rem .62rem;
-  font-size:.7rem;font-weight:800;cursor:pointer;font-family:var(--ff);
-  transition:all var(--ease)}
-.qbar-finish:hover{background:var(--ok);color:#fff;box-shadow:0 0 14px rgba(16,185,129,.4)}
-
-/* Center zone: stat boxes (your 3 drawn squares) */
-.qbar-stats{display:flex;gap:.35rem;align-items:center}
-.qstat{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  width:44px;height:44px;
-  border-radius:var(--r1);
-  border:1px solid var(--bd);
+  align-items:stretch;     /* zones stretch to same height */
+  min-height:54px;
   background:var(--bg1);
-  font-weight:800;gap:1px;
-  position:relative;
 }
-.qstat-val{font-family:var(--fm);font-size:.9rem;line-height:1;font-weight:800}
-.qstat-lbl{font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;opacity:.75}
-.qstat-icon{position:absolute;top:-2px;right:-2px;font-size:.65rem;line-height:1}
-.qstat.qs-ok{background:var(--ok-bg);border-color:var(--ok-bd)}
-.qstat.qs-ok .qstat-val{color:var(--ok)}
-.qstat.qs-ok .qstat-lbl{color:var(--ok)}
-.qstat.qs-bad{background:var(--bad-bg);border-color:var(--bad-bd)}
-.qstat.qs-bad .qstat-val{color:var(--bad)}
-.qstat.qs-bad .qstat-lbl{color:var(--bad)}
-.qstat.qs-skip{background:var(--warn-bg);border-color:var(--warn-bd)}
-.qstat.qs-skip .qstat-val{color:var(--warn)}
-.qstat.qs-skip .qstat-lbl{color:var(--warn)}
 
-/* Right zone: timer + quit */
-.qbar-right{display:flex;flex-direction:column;align-items:flex-end;gap:.28rem}
-.qbar-timer{
-  font-family:var(--fm);font-size:.9rem;font-weight:700;
-  background:var(--bg2);border:1px solid var(--bd2);
-  color:var(--neon);border-radius:var(--r1);padding:.28rem .62rem;
-  letter-spacing:1.5px;text-shadow:0 0 10px rgba(0,229,255,.3);
+/* vertical dividers between zones */
+.qb-zone{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding:.4rem .65rem;
 }
-.qbar-timer.ticking{border-color:rgba(0,229,255,.35);background:rgba(0,229,255,.06)}
-.qbar-timer.urgent{border-color:var(--bad-bd);background:var(--bad-bg);color:var(--bad);animation:tick-urgent .5s ease infinite}
-@keyframes tick-urgent{0%,100%{opacity:1}50%{opacity:.5}}
-.qbar-quit{display:flex;align-items:center;gap:.25rem;
-  background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.22);
-  color:var(--neon5);border-radius:var(--r1);padding:.28rem .62rem;
-  font-size:.7rem;font-weight:800;cursor:pointer;font-family:var(--ff);
-  transition:all var(--ease)}
-.qbar-quit:hover{background:var(--bad);color:#fff;box-shadow:0 0 14px rgba(239,68,68,.4)}
+.qb-zone+.qb-zone{border-left:1px solid var(--bd2)}
 
-/* Row 3 — dual progress bars */
-.qbar-foot{padding:0 .75rem .45rem}
-.qprog{height:4px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:3px}
-.qpf{height:100%;background:linear-gradient(90deg,var(--neon2),var(--neon));border-radius:3px;transition:width .28s ease;will-change:width}
-.rbar{display:flex;height:4px;border-radius:3px;overflow:hidden;gap:1px}
-.rbar-g{background:var(--ok);flex:0;transition:flex .3s}
-.rbar-r{background:var(--bad);flex:0;transition:flex .3s}
+/* LEFT zone: counter on top, finish below */
+.qb-zone.qbz-left{align-items:flex-start}
+.qb-ctr{
+  font-family:var(--fm);
+  font-size:.9rem;font-weight:700;
+  color:var(--t1);letter-spacing:.2px;
+  line-height:1;margin-bottom:.28rem;
+}
+.qb-ctr em{font-style:normal;color:var(--t3);font-size:.72rem}
+.qb-act{
+  display:inline-flex;align-items:center;gap:.22rem;
+  border-radius:7px;padding:.2rem .5rem;
+  font-size:.67rem;font-weight:800;
+  cursor:pointer;font-family:var(--ff);
+  border:1px solid;line-height:1;white-space:nowrap;
+  transition:all var(--ease);
+}
+.qb-act.finish{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.38);color:var(--ok)}
+.qb-act.finish:hover{background:var(--ok);color:#fff;box-shadow:0 0 12px rgba(16,185,129,.5)}
+.qb-act.submit{background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.38);color:var(--ok)}
+.qb-act.submit:hover{background:var(--ok);color:#fff}
+.qb-act.quit{background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.3);color:var(--neon5)}
+.qb-act.quit:hover{background:var(--bad);color:#fff;box-shadow:0 0 12px rgba(239,68,68,.5)}
+
+/* CENTER zone: 3 stat squares */
+.qb-zone.qbz-center{
+  align-items:center;
+  padding:.4rem .5rem;
+}
+.qb-stats{display:flex;gap:.28rem;align-items:center}
+.qst{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  width:42px;height:42px;
+  border-radius:9px;
+  border:1px solid;
+  transition:transform .14s ease;
+}
+.qst:hover{transform:scale(1.07)}
+.qst-sym{font-size:.68rem;font-weight:900;line-height:1;margin-bottom:1px}
+.qst-n{font-family:var(--fm);font-size:.88rem;font-weight:800;line-height:1}
+.qst-lb{font-size:.43rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;opacity:.8;margin-top:1px;line-height:1}
+/* green = correct */
+.qst.qst-ok{background:var(--ok-bg);border-color:var(--ok-bd)}
+.qst.qst-ok .qst-sym,.qst.qst-ok .qst-n{color:var(--ok)}
+.qst.qst-ok .qst-lb{color:var(--ok)}
+/* red = wrong */
+.qst.qst-bad{background:var(--bad-bg);border-color:var(--bad-bd)}
+.qst.qst-bad .qst-sym,.qst.qst-bad .qst-n{color:var(--bad)}
+.qst.qst-bad .qst-lb{color:var(--bad)}
+/* amber = skipped */
+.qst.qst-skip{background:var(--warn-bg);border-color:var(--warn-bd)}
+.qst.qst-skip .qst-sym,.qst.qst-skip .qst-n{color:var(--warn)}
+.qst.qst-skip .qst-lb{color:var(--warn)}
+/* cyan = answered (exam) */
+.qst.qst-ans{background:rgba(0,229,255,.08);border-color:rgba(0,229,255,.3);width:50px}
+.qst.qst-ans .qst-sym,.qst.qst-ans .qst-n{color:var(--neon)}
+.qst.qst-ans .qst-lb{color:var(--neon)}
+
+/* RIGHT zone: timer on top, quit below */
+.qb-zone.qbz-right{align-items:flex-end}
+.qb-timer{
+  font-family:var(--fm);
+  font-size:.9rem;font-weight:700;
+  letter-spacing:2px;
+  color:var(--neon);
+  line-height:1;margin-bottom:.28rem;
+  text-shadow:0 0 10px rgba(0,229,255,.3);
+  transition:color .2s;
+}
+.qb-timer.urgent{
+  color:var(--bad);
+  text-shadow:0 0 10px rgba(239,68,68,.4);
+  animation:urg .5s ease infinite;
+}
+@keyframes urg{0%,100%{opacity:1}50%{opacity:.45}}
+
+/* ─── LINE 3: dual progress bars ─── */
+.qb-l3{
+  padding:.25rem .75rem .38rem;
+  display:flex;flex-direction:column;gap:3px;
+  border-top:1px solid rgba(0,229,255,.07);
+  background:var(--bg1);
+}
+.qprog{height:3px;background:var(--bg2);border-radius:3px;overflow:hidden}
+.qpf{height:100%;background:linear-gradient(90deg,var(--neon2),var(--neon));border-radius:3px;transition:width .3s ease;will-change:width}
+.rbar{display:flex;height:3px;border-radius:3px;overflow:hidden;gap:1px}
+.rbar-g{background:var(--ok);flex:0;transition:flex .35s ease}
+.rbar-r{background:var(--bad);flex:0;transition:flex .35s ease}
 .rbar-s{background:var(--bd2);flex:1}
 
-/* Exam qbar: same structure, slight variation */
-.qbar-exam-ctr{font-family:var(--fm);font-size:.82rem;font-weight:700;color:var(--t1)}
-.qbar-submit{display:flex;align-items:center;gap:.25rem;
-  background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);
-  color:var(--ok);border-radius:var(--r1);padding:.28rem .62rem;
-  font-size:.7rem;font-weight:800;cursor:pointer;font-family:var(--ff);
-  transition:all var(--ease)}
-.qbar-submit:hover{background:var(--ok);color:#fff}
-
-/* ════ QUESTION CARD ════ */
+/* ══ QUESTION CARD ══ */
 .qcard{background:var(--surf);border:1px solid var(--bd);border-radius:var(--r3);padding:1.1rem;margin-bottom:.9rem;border-left:4px solid var(--neon);animation:qin .18s ease}
 @keyframes qin{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
 .qm{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem}
 .qn{font-size:.68rem;font-weight:700;color:var(--t3);font-family:var(--fm)}
 .qa{display:flex;gap:.28rem}
-.ib{width:28px;height:28px;border-radius:var(--r1);background:var(--bg1);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.82rem;cursor:pointer;transition:all var(--ease);color:var(--t2)}
+.ib{width:30px;height:30px;border-radius:var(--r1);background:var(--bg1);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:.82rem;cursor:pointer;transition:all var(--ease);color:var(--t2);text-decoration:none}
 .ib:hover{background:var(--surf2);color:var(--t1)}
 .ib.starred{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:var(--neon4)}
 .ib.flagged{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:var(--neon5)}
@@ -398,12 +413,45 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .expl{background:var(--bg1);border-left:3px solid var(--neon);border-radius:0 var(--r1) var(--r1) 0;padding:.7rem .9rem;margin-top:.7rem;font-size:.8rem;color:var(--t2);line-height:1.6;display:none}
 .expl.show{display:block;animation:fi .18s ease}
 @keyframes fi{from{opacity:0}to{opacity:1}}
-
-/* Flashcard nav footer */
 .fc-nav{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.5rem}
 .fc-hint{font-size:.7rem;color:var(--t3);text-align:center;flex:1}
 
-/* ════ EXAM OPTS ════ */
+/* ══ SEARCH PANEL (inside question card) ══ */
+.srch-wrap{
+  margin-top:.6rem;
+  border-top:1px solid var(--bd);
+  padding-top:.6rem;
+  display:none;
+}
+.srch-wrap.open{display:block;animation:fi .15s ease}
+.srch-inp-row{display:flex;gap:.4rem}
+.srch-inp{
+  flex:1;background:var(--bg0);border:1.5px solid var(--bd);
+  border-radius:var(--r1);padding:.45rem .7rem;
+  color:var(--t1);font-size:.8rem;font-family:var(--ff);outline:none;
+  transition:border-color var(--ease);
+}
+.srch-inp:focus{border-color:var(--neon);box-shadow:0 0 0 3px rgba(0,229,255,.1)}
+.srch-btn{flex-shrink:0;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25);border-radius:var(--r1);padding:.45rem .75rem;color:var(--neon);font-size:.75rem;font-weight:700;cursor:pointer;font-family:var(--ff);transition:all var(--ease)}
+.srch-btn:hover{background:var(--neon);color:var(--bg0)}
+.srch-links{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.45rem}
+.srch-link{
+  display:inline-flex;align-items:center;gap:.25rem;
+  padding:.25rem .55rem;border-radius:7px;
+  font-size:.68rem;font-weight:700;
+  text-decoration:none;border:1px solid;
+  transition:all var(--ease);cursor:pointer;
+}
+.sl-g{background:rgba(66,133,244,.1);border-color:rgba(66,133,244,.3);color:#4285f4}
+.sl-g:hover{background:#4285f4;color:#fff}
+.sl-y{background:rgba(255,0,0,.1);border-color:rgba(255,0,0,.25);color:#f00}
+.sl-y:hover{background:#f00;color:#fff}
+.sl-w{background:rgba(51,102,153,.1);border-color:rgba(51,102,153,.3);color:#336699}
+.sl-w:hover{background:#336699;color:#fff}
+.sl-c{background:rgba(0,229,255,.08);border-color:rgba(0,229,255,.22);color:var(--neon)}
+.sl-c:hover{background:var(--neon);color:var(--bg0)}
+
+/* ══ EXAM OPTS ══ */
 .eo{display:flex;align-items:center;gap:.45rem;padding:.42rem .65rem;margin:.18rem 0;border-radius:var(--r1);font-size:.79rem;font-weight:500;background:var(--bg1);border:1px solid var(--bd);cursor:pointer;transition:all var(--ease)}
 .eo:hover{background:var(--surf2)}
 .eo.sel{background:rgba(0,229,255,.07);border-color:rgba(0,229,255,.3);color:var(--neon)}
@@ -413,7 +461,7 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .eqc{background:var(--surf);border:1px solid var(--bd);border-radius:var(--r2);padding:.9rem;margin-bottom:.65rem;border-left:3px solid var(--bd2);transition:border-color .2s}
 .eqc.answered{border-left-color:var(--neon)}
 
-/* ════ RESULT ════ */
+/* ══ RESULT ══ */
 .rh{text-align:center;padding:1.75rem 1rem}
 .ring{width:110px;height:110px;border-radius:50%;background:conic-gradient(var(--neon) var(--p,0%),var(--bg2) 0%);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;position:relative;box-shadow:0 0 28px rgba(0,229,255,.2)}
 .ring::before{content:'';position:absolute;inset:11px;background:var(--surf);border-radius:50%}
@@ -421,13 +469,13 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .rs{font-size:1.1rem;font-weight:800;font-family:var(--fm)}
 .rg{font-size:.88rem;font-weight:600;color:var(--t3);margin-top:.35rem}
 
-/* ════ PROGRESS BARS ════ */
+/* ══ PROGRESS BARS ══ */
 .pb-w{margin:.45rem 0}
 .pb-l{display:flex;justify-content:space-between;font-size:.68rem;color:var(--t3);margin-bottom:.22rem}
 .pb{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden}
 .pb-f{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--neon2),var(--neon));transition:width .5s ease}
 
-/* ════ TIMETABLE ════ */
+/* ══ TIMETABLE ══ */
 .tt-clock{text-align:center;padding:.9rem 0;font-family:var(--fm);font-size:1.9rem;font-weight:700;color:var(--neon);letter-spacing:2px;text-shadow:0 0 20px rgba(0,229,255,.3)}
 .tt-date{text-align:center;font-size:.72rem;color:var(--t3);margin-bottom:.7rem}
 .tt-now{background:linear-gradient(135deg,rgba(0,229,255,.08),rgba(124,58,237,.08));border:1px solid rgba(0,229,255,.18);border-radius:var(--r2);padding:.9rem;margin-bottom:.7rem;text-align:center}
@@ -438,11 +486,10 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .tt-row:last-child{border:none}
 .tt-ti{font-family:var(--fm);color:var(--neon);font-weight:700;font-size:.7rem;width:86px;flex-shrink:0}
 .tt-na{flex:1;font-weight:600;color:var(--t1)}
-.tt-form input,.tt-form select{margin-bottom:.32rem}
-.tt-form input[type=time],.tt-form input[type=text],.tt-form select{width:100%;background:var(--bg1);border:1.5px solid var(--bd);border-radius:var(--r1);padding:.55rem .7rem;color:var(--t1);font-size:.82rem;font-family:var(--ff);outline:none}
+.tt-form input[type=time],.tt-form input[type=text],.tt-form select{width:100%;background:var(--bg1);border:1.5px solid var(--bd);border-radius:var(--r1);padding:.55rem .7rem;color:var(--t1);font-size:.82rem;font-family:var(--ff);outline:none;margin-bottom:.32rem}
 .tt-form input:focus,.tt-form select:focus{border-color:var(--neon);box-shadow:0 0 0 3px rgba(0,229,255,.1)}
 
-/* ════ CACHE ════ */
+/* ══ CACHE ══ */
 .cpb{height:7px;background:var(--bg2);border-radius:4px;overflow:hidden;margin:.45rem 0;display:none}
 .cpf{height:100%;background:linear-gradient(90deg,var(--neon2),var(--neon));border-radius:4px;width:0;transition:width .3s}
 .cg{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
@@ -451,14 +498,14 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .ci-s{display:flex;align-items:center;gap:.35rem;font-size:.68rem;color:var(--t3)}
 .cd{width:8px;height:8px;border-radius:50%;background:var(--bad)}.cd.y{background:var(--ok)}
 
-/* ════ TOASTS ════ */
-#toasts{position:fixed;bottom:calc(var(--bnav) + var(--safe-b) + .75rem);left:50%;transform:translateX(-50%);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:.35rem;pointer-events:none;width:calc(100vw - 2rem);max-width:360px}
+/* ══ TOASTS ══ */
+#toasts{position:fixed;bottom:calc(var(--bnav)+var(--safe-b)+.75rem);left:50%;transform:translateX(-50%);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:.35rem;pointer-events:none;width:calc(100vw - 2rem);max-width:360px}
 .toast{background:var(--surf3);border:1px solid var(--bd2);border-radius:var(--r2);padding:.58rem 1rem;font-size:.78rem;font-weight:600;color:var(--t1);box-shadow:var(--sh2);animation:tin .2s cubic-bezier(.34,1.56,.64,1);pointer-events:auto;max-width:100%;backdrop-filter:blur(8px)}
 .toast.out{animation:tout .25s ease forwards}
 @keyframes tin{from{opacity:0;transform:translateY(14px) scale(.92)}to{opacity:1;transform:none}}
 @keyframes tout{from{opacity:1}to{opacity:0;transform:translateY(-8px)}}
 
-/* ════ MODAL ════ */
+/* ══ MODAL ══ */
 .mbg{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:1rem}
 .mbg.show{display:flex}
 .mbox{background:var(--surf);border:1px solid var(--bd2);border-radius:var(--r4);width:100%;max-width:440px;max-height:85vh;overflow-y:auto;box-shadow:var(--sh2);animation:mfade .18s cubic-bezier(.34,1.56,.64,1)}
@@ -469,7 +516,7 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 .mcl:hover{background:var(--bad-bg);color:var(--bad);border-color:var(--bad-bd)}
 .mbody{padding:1rem 1.1rem}
 
-/* ════ MISC ════ */
+/* ══ MISC ══ */
 .empty{text-align:center;padding:2rem 1rem;color:var(--t3)}
 .empty-i{font-size:2rem;margin-bottom:.45rem}
 .empty p{font-size:.8rem}
@@ -477,46 +524,26 @@ body{font-family:var(--ff);background:var(--bg0);color:var(--t1);min-height:100v
 hr{border:none;border-top:1px solid var(--bd);margin:.65rem 0}
 input[type=file]{background:var(--bg1);border:1.5px dashed var(--bd2);border-radius:var(--r1);padding:.55rem .85rem;color:var(--t2);font-size:.78rem;width:100%;cursor:pointer;transition:border-color var(--ease)}
 input[type=file]:hover{border-color:var(--neon)}
-[data-tip]{position:relative}
-[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--bg0);border:1px solid var(--bd2);color:var(--t1);font-size:.62rem;white-space:nowrap;padding:.22rem .45rem;border-radius:6px;pointer-events:none;z-index:9}
-
-/* session rows */
-.sess-row{display:flex;align-items:center;padding:.48rem 0;border-bottom:1px solid var(--bd);gap:.5rem}
-.sess-row:last-child{border:none}
-.sess-ic{font-size:.95rem;flex-shrink:0}
-.sess-info{flex:1;min-width:0}
-.sess-ch{font-weight:700;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sess-ts{color:var(--t3);font-size:.66rem;margin-top:.06rem}
-
-/* psycho hero */
-.psy-hero{background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(0,229,255,.08));border:1px solid rgba(124,58,237,.28);border-radius:var(--r3);padding:.9rem 1rem;margin-bottom:.8rem;display:flex;align-items:center;gap:.85rem}
-.psy-hero-ic{font-size:1.9rem}
-.psy-hero-text h4{font-size:.92rem;font-weight:800;color:var(--neon2)}
-.psy-hero-text p{font-size:.72rem;color:var(--t3);margin-top:.15rem;line-height:1.5}
 </style>
 </head>
 <body>
 
-<!-- ═══════ LOGIN SCREEN ═══════ -->
+<!-- ══════════ LOGIN ══════════ -->
 <div id="lw">
-  <div class="l-bg"></div>
-  <div class="l-grid"></div>
+  <div class="l-bg"></div><div class="l-grid"></div>
   <div class="l-card">
     <div class="l-logo">
       <div class="l-icon">🧠</div>
       <h1>HAMRO AFNAI</h1>
       <p>Smart Study Hub · Nepal Engineering</p>
     </div>
-    <div class="l-net">
-      <div class="ndot" id="ndot"></div>
-      <span id="nstat">Checking connection…</span>
-    </div>
+    <div class="l-net"><div class="ndot" id="ndot"></div><span id="nstat">Checking connection…</span></div>
     <div class="lf"><label>Username</label><input type="text" id="lu" placeholder="Enter your username" autocomplete="username" autocapitalize="none"></div>
     <div class="lf"><label>Password</label><input type="password" id="lp" placeholder="Enter your password" autocomplete="current-password"></div>
     <div id="signup-fields" style="display:none">
       <div class="lf"><label>Full Name</label><input type="text" id="su-name" placeholder="Your name"></div>
       <div class="lf">
-        <label>Contact (for admin to reach you)</label>
+        <label>Contact</label>
         <div style="display:flex;gap:.4rem">
           <select id="su-contact-type" style="max-width:110px"><option value="email">Email</option><option value="phone">Phone</option></select>
           <input type="text" id="su-contact" placeholder="you@example.com" style="flex:1">
@@ -525,40 +552,35 @@ input[type=file]:hover{border-color:var(--neon)}
     </div>
     <div class="l-err" id="lerr"></div>
     <button class="l-btn" id="lbtn" onclick="AUTH.login()">Sign In →</button>
-    <div class="l-switch">
-      <span id="auth-toggle-text">New here?</span>
-      <button id="auth-toggle-btn" onclick="AUTH.switchMode(AUTH.mode==='login'?'signup':'login')">Create Account</button>
-    </div>
+    <div class="l-switch"><span id="auth-toggle-text">New here?</span><button id="auth-toggle-btn" onclick="AUTH.switchMode(AUTH.mode==='login'?'signup':'login')">Create Account</button></div>
     <div class="l-admin-link"><button onclick="ADMIN.openLogin()">🛡️ Admin Sign In</button></div>
   </div>
 </div>
 
-<!-- ═══════ APP SHELL ═══════ -->
+<!-- ══════════ APP ══════════ -->
 <div id="app">
-  <div class="off-bar" id="offbar">📡 Offline mode — quiz data from cache</div>
+  <div class="off-bar" id="offbar">📡 Offline — quiz data from cache</div>
 
   <!-- TOPBAR -->
   <div id="tb">
     <div class="tb-brand" onclick="UI.go('home')">
-      <div class="bd-dot">🧠</div>
-      HAMRO AFNAI
+      <div class="bd-dot">🧠</div>HAMRO AFNAI
     </div>
     <div class="tb-r">
       <div class="uchip" id="uchip">👤 —</div>
-      <button class="tb-btn" onclick="UI.sidebarToggle()" aria-label="Menu">☰</button>
-      <button class="tb-btn" onclick="UI.theme()" data-tip="Toggle theme">🌓</button>
-      <button class="tb-btn" onclick="PWA.toggleFullscreen()" data-tip="Fullscreen">⛶</button>
+      <button class="tb-btn" onclick="UI.sidebarToggle()">☰</button>
+      <button class="tb-btn" onclick="UI.theme()">🌓</button>
+      <button class="tb-btn" onclick="PWA.toggleFullscreen()">⛶</button>
       <button class="tb-btn" id="installBtn" style="display:none" onclick="PWA.install()">📲</button>
-      <button class="tb-btn" id="adminBtn" onclick="ADMIN.openPanel()" data-tip="Admin">🛡️</button>
+      <button class="tb-btn" id="adminBtn" onclick="ADMIN.openPanel()">🛡️</button>
       <button class="tb-btn danger" onclick="AUTH.logout()">🚪 Exit</button>
     </div>
   </div>
 
-  <!-- LAYOUT -->
   <div id="layout">
     <div id="ov" onclick="UI.sidebarClose()"></div>
 
-    <!-- ═══ SIDEBAR ═══ -->
+    <!-- SIDEBAR -->
     <div id="sb">
       <button class="sb-close" onclick="UI.sidebarClose()">✕</button>
       <div class="sb-sec">
@@ -593,12 +615,12 @@ input[type=file]:hover{border-color:var(--neon)}
           <button class="btn btn-a btn-sm" style="flex:1" onclick="SB.go('exam')">📝 Exam</button>
         </div>
       </div>
-    </div>
+    </div><!-- /sb -->
 
-    <!-- ═══ MAIN ═══ -->
+    <!-- MAIN -->
     <div id="main">
 
-      <!-- HOME / DASHBOARD -->
+      <!-- ── DASHBOARD ── -->
       <div class="view on" id="view-home">
         <div class="dash-greet">
           <div class="dash-greet-text">
@@ -607,30 +629,26 @@ input[type=file]:hover{border-color:var(--neon)}
           </div>
           <div class="dash-greet-icon" id="greeting-icon">🌅</div>
         </div>
-
         <div class="g4" id="home-stats" style="margin-bottom:.85rem">
           <div class="sc sc-c"><div class="sv tcy" id="hs-tot">0</div><div class="sl">Answered</div></div>
           <div class="sc sc-g"><div class="sv tc2" id="hs-cor">0</div><div class="sl">Correct</div></div>
           <div class="sc sc-r"><div class="sv tb2" id="hs-wrg">0</div><div class="sl">Wrong</div></div>
           <div class="sc sc-a"><div class="sv ta2" id="hs-pct">0%</div><div class="sl">Accuracy</div></div>
         </div>
-
         <div class="quick-actions">
           <button class="qa-btn" onclick="UI.go('online')"><span class="qa-ic">☁️</span>Study</button>
           <button class="qa-btn" onclick="UI.go('psycho')"><span class="qa-ic">⚡</span>Psycho</button>
           <button class="qa-btn" onclick="UI.go('wrong')"><span class="qa-ic">❌</span>Wrong Bank</button>
         </div>
-
         <div class="daily-card">
           <div class="daily-top">
             <h3>🌟 Daily Challenge</h3>
             <div class="stk-tag" id="stk-tag">🔥 0 day streak</div>
           </div>
           <div class="sk-bar" id="sk-bar"></div>
-          <p class="daily-desc">30 mixed questions from all chapters — a new set every day.</p>
+          <p class="daily-desc">30 mixed questions from all chapters — a fresh set every day.</p>
           <button class="daily-btn" onclick="QUIZ.daily()">🚀 Start Today's Challenge</button>
         </div>
-
         <div class="g2" style="align-items:start">
           <div class="card">
             <div class="card-hd"><h3>📈 Recent Sessions</h3></div>
@@ -645,7 +663,7 @@ input[type=file]:hover{border-color:var(--neon)}
         </div>
       </div>
 
-      <!-- ONLINE STUDY -->
+      <!-- ── ONLINE STUDY ── -->
       <div class="view" id="view-online">
         <div class="ph"><h2>☁️ Online Study</h2><p>Pick a level → chapter → subtopic, then choose your mode.</p></div>
         <div class="card">
@@ -661,7 +679,7 @@ input[type=file]:hover{border-color:var(--neon)}
         </div>
       </div>
 
-      <!-- LOCAL FILE -->
+      <!-- ── LOCAL FILE ── -->
       <div class="view" id="view-local">
         <div class="ph"><h2>📂 Local File</h2><p>Load your own JSON question bank and quiz yourself offline.</p></div>
         <div class="card">
@@ -677,17 +695,14 @@ input[type=file]:hover{border-color:var(--neon)}
         </div>
       </div>
 
-      <!-- PSYCHO MODE -->
+      <!-- ── PSYCHO MODE ── -->
       <div class="view" id="view-psycho">
-        <div class="ph"><h2>⚡ Psycho Mode</h2><p>Mix chapters, randomise everything, focus on your weaknesses.</p></div>
-        <div class="psy-hero">
-          <div class="psy-hero-ic">⚡</div>
-          <div class="psy-hero-text"><h4>Multi-chapter Gauntlet</h4><p>Mix chapters · exam pressure · weak-area targeting · built for crunch time.</p></div>
-        </div>
+        <div class="ph"><h2>⚡ Psycho Mode</h2><p>Mix chapters, randomise everything, target your weaknesses.</p></div>
+        <div class="psy-hero"><div class="psy-hero-ic">⚡</div><div class="psy-hero-text"><h4>Multi-chapter Gauntlet</h4><p>Mix chapters · exam pressure · weak-area targeting · crunch-time training.</p></div></div>
         <div class="card">
           <div class="card-hd"><h3>Levels &amp; Chapters</h3><span class="ctag tp">Multi-level</span></div>
           <div class="bg" style="margin-bottom:.6rem">
-            <button class="btn btn-sm btn-c" onclick="PSY.all()">✅ Select All</button>
+            <button class="btn btn-sm btn-c" onclick="PSY.all()">✅ All</button>
             <button class="btn btn-sm btn-r" onclick="PSY.none()">✕ Clear</button>
           </div>
           <div id="psy-levels"></div>
@@ -701,175 +716,136 @@ input[type=file]:hover{border-color:var(--neon)}
         </div>
       </div>
 
-      <!-- BOOKMARKS -->
+      <!-- ── BOOKMARKS ── -->
       <div class="view" id="view-bookmarks">
-        <div class="ph"><h2>⭐ Bookmarks</h2><p>Questions you've saved for revision.</p></div>
-        <div class="card">
-          <div class="card-hd"><h3>Saved Questions</h3>
-            <div class="bg">
-              <button class="btn btn-sm btn-c" onclick="REV.start('bk','flashcard')">⚡ Flash</button>
-              <button class="btn btn-sm btn-a" onclick="REV.start('bk','exam')">📝 Exam</button>
-              <button class="btn btn-sm btn-r" onclick="REV.clearAll('bk')">🗑</button>
-            </div>
-          </div>
-          <div id="bk-list"></div>
-        </div>
+        <div class="ph"><h2>⭐ Bookmarks</h2></div>
+        <div class="card"><div class="card-hd"><h3>Saved Questions</h3><div class="bg"><button class="btn btn-sm btn-c" onclick="REV.start('bk','flashcard')">⚡ Flash</button><button class="btn btn-sm btn-a" onclick="REV.start('bk','exam')">📝 Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('bk')">🗑</button></div></div><div id="bk-list"></div></div>
       </div>
 
-      <!-- FLAGGED -->
+      <!-- ── FLAGGED ── -->
       <div class="view" id="view-flagged">
-        <div class="ph"><h2>🚩 Flagged</h2><p>Questions marked for follow-up.</p></div>
-        <div class="card">
-          <div class="card-hd"><h3>Flagged Questions</h3>
-            <div class="bg">
-              <button class="btn btn-sm btn-c" onclick="REV.start('fl','flashcard')">⚡ Flash</button>
-              <button class="btn btn-sm btn-a" onclick="REV.start('fl','exam')">📝 Exam</button>
-              <button class="btn btn-sm btn-r" onclick="REV.clearAll('fl')">🗑</button>
-            </div>
-          </div>
-          <div id="fl-list"></div>
-        </div>
+        <div class="ph"><h2>🚩 Flagged</h2></div>
+        <div class="card"><div class="card-hd"><h3>Flagged Questions</h3><div class="bg"><button class="btn btn-sm btn-c" onclick="REV.start('fl','flashcard')">⚡ Flash</button><button class="btn btn-sm btn-a" onclick="REV.start('fl','exam')">📝 Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('fl')">🗑</button></div></div><div id="fl-list"></div></div>
       </div>
 
-      <!-- WRONG BANK -->
+      <!-- ── WRONG BANK ── -->
       <div class="view" id="view-wrong">
-        <div class="ph"><h2>❌ Wrong Bank</h2><p>Every question you've got wrong — retry to master them.</p></div>
-        <div class="card">
-          <div class="card-hd"><h3>Wrong Answers</h3>
-            <div class="bg">
-              <button class="btn btn-sm btn-p" onclick="REV.start('wr','flashcard')">⚡ Retry All</button>
-              <button class="btn btn-sm btn-r" onclick="REV.clearAll('wr')">🗑 Clear</button>
-            </div>
-          </div>
-          <div id="wr-list"></div>
-        </div>
+        <div class="ph"><h2>❌ Wrong Bank</h2></div>
+        <div class="card"><div class="card-hd"><h3>Wrong Answers</h3><div class="bg"><button class="btn btn-sm btn-p" onclick="REV.start('wr','flashcard')">⚡ Retry All</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('wr')">🗑 Clear</button></div></div><div id="wr-list"></div></div>
       </div>
 
-      <!-- TIMETABLE -->
+      <!-- ── TIMETABLE ── -->
       <div class="view" id="view-timetable">
-        <div class="ph"><h2>📅 Timetable</h2><p>Plan study sessions by day. Get browser notifications.</p></div>
+        <div class="ph"><h2>📅 Timetable</h2><p>Plan study sessions. Get browser notifications.</p></div>
         <div class="g2" style="align-items:start">
           <div>
-            <div class="card">
-              <div class="tt-clock" id="tt-clock">00:00:00</div>
-              <div class="tt-date" id="tt-date"></div>
-              <div id="tt-now"></div>
-            </div>
-            <div class="card">
-              <div class="card-hd"><h3>Today's Schedule</h3>
-                <div class="bg">
-                  <button class="btn btn-sm btn-c" onclick="TT.exportJ()">📤</button>
-                  <button class="btn btn-sm btn-c" onclick="TT.importJ()">📥</button>
-                  <button class="btn btn-sm" id="notif-btn" onclick="TT.notif()">🔔 Notifs</button>
-                </div>
-              </div>
-              <div id="tt-today"></div>
-            </div>
+            <div class="card"><div class="tt-clock" id="tt-clock">00:00:00</div><div class="tt-date" id="tt-date"></div><div id="tt-now"></div></div>
+            <div class="card"><div class="card-hd"><h3>Today's Schedule</h3><div class="bg"><button class="btn btn-sm btn-c" onclick="TT.exportJ()">📤</button><button class="btn btn-sm btn-c" onclick="TT.importJ()">📥</button><button class="btn btn-sm" id="notif-btn" onclick="TT.notif()">🔔</button></div></div><div id="tt-today"></div></div>
           </div>
           <div>
-            <div class="card">
-              <div class="card-hd"><h3>Add Session</h3><span class="ctag tg">New</span></div>
+            <div class="card"><div class="card-hd"><h3>Add Session</h3><span class="ctag tg">New</span></div>
               <div class="tt-form">
-                <select id="tt-day" style="margin-bottom:.35rem"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
+                <select id="tt-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
                 <input type="text" id="tt-name" placeholder="Session name (e.g. Hydraulics Review)">
                 <div class="g2"><input type="time" id="tt-s"><input type="time" id="tt-e"></div>
                 <button class="btn btn-g btn-blk" style="margin-top:.4rem" onclick="TT.add()">+ Add Session</button>
               </div>
             </div>
-            <div class="card">
-              <div class="card-hd"><h3>Full Week</h3></div>
-              <div id="tt-week"></div>
-            </div>
+            <div class="card"><div class="card-hd"><h3>Full Week</h3></div><div id="tt-week"></div></div>
           </div>
         </div>
       </div>
 
-      <!-- PROGRESS -->
+      <!-- ── PROGRESS ── -->
       <div class="view" id="view-progress">
-        <div class="ph"><h2>📊 Progress</h2><p>Overall performance and per-chapter accuracy.</p></div>
+        <div class="ph"><h2>📊 Progress</h2></div>
         <div class="g4" id="prog-stats" style="margin-bottom:.9rem"></div>
-        <div class="card">
-          <div class="card-hd"><h3>Chapter Accuracy</h3><span class="ctag tp">Breakdown</span></div>
-          <div id="chap-acc"></div>
-        </div>
-        <div class="card">
-          <div class="card-hd"><h3>Data Management</h3><span class="ctag tr">Admin</span></div>
-          <div class="bg">
-            <button class="btn btn-c" onclick="DATA.exp()">📤 Export All</button>
-            <button class="btn btn-c" onclick="DATA.imp()">📥 Import</button>
-            <button class="btn btn-a" onclick="DATA.clearQ()">🧹 Clear Q Cache</button>
-            <button class="btn btn-r" onclick="DATA.reset()">⚠️ Reset All</button>
-          </div>
-        </div>
+        <div class="card"><div class="card-hd"><h3>Chapter Accuracy</h3><span class="ctag tp">Breakdown</span></div><div id="chap-acc"></div></div>
+        <div class="card"><div class="card-hd"><h3>Data Management</h3><span class="ctag tr">Admin</span></div><div class="bg"><button class="btn btn-c" onclick="DATA.exp()">📤 Export</button><button class="btn btn-c" onclick="DATA.imp()">📥 Import</button><button class="btn btn-a" onclick="DATA.clearQ()">🧹 Clear Cache</button><button class="btn btn-r" onclick="DATA.reset()">⚠️ Reset All</button></div></div>
       </div>
 
-      <!-- OFFLINE CACHE -->
+      <!-- ── OFFLINE CACHE ── -->
       <div class="view" id="view-offline">
-        <div class="ph"><h2>📦 Offline Cache</h2><p>Download all quiz data to your device for offline study.</p></div>
+        <div class="ph"><h2>📦 Offline Cache</h2></div>
         <div class="card">
           <div class="card-hd"><h3>Cache Status</h3><span class="ctag" id="cache-tag">Checking…</span></div>
           <div id="cache-txt" style="font-size:.78rem;color:var(--t3);margin-bottom:.7rem"></div>
           <div class="cpb" id="cpb"><div class="cpf" id="cpf"></div></div>
           <div id="cptxt" style="font-size:.7rem;color:var(--t3);margin:.28rem 0"></div>
-          <div class="bg" style="margin-top:.4rem">
-            <button class="btn btn-g btn-lg" onclick="CACHE.dl()">⬇️ Cache All Data</button>
-            <button class="btn btn-r btn-sm" onclick="CACHE.clr()">🗑 Clear</button>
-          </div>
-          <hr>
-          <p style="font-size:.7rem;color:var(--t3);margin-bottom:.4rem">Per-level status:</p>
+          <div class="bg" style="margin-top:.4rem"><button class="btn btn-g btn-lg" onclick="CACHE.dl()">⬇️ Cache All Data</button><button class="btn btn-r btn-sm" onclick="CACHE.clr()">🗑 Clear</button></div>
+          <hr><p style="font-size:.7rem;color:var(--t3);margin-bottom:.4rem">Per-level:</p>
           <div class="cg" id="cache-grid"></div>
         </div>
       </div>
 
-      <!-- ════════════════════════════════════════════
-           QUIZ WRAPPER — NEW BAR DESIGN FROM YOUR SKETCH
-           ════════════════════════════════════════════ -->
+      <!-- ══════════════════════════════════════════════
+           QUIZ WRAPPER
+           ══════════════════════════════════════════════ -->
       <div id="quiz-wrap" style="display:none">
 
-        <!-- ── FLASHCARD MODE ── -->
+        <!-- ─── FLASHCARD ─── -->
         <div id="fc-wrap">
-          <!-- NEW QUIZ BAR: Chapter title + [counter/finish | stats | timer/quit] -->
-          <div class="qbar">
-            <div class="qbar-title">
-              <span class="qbar-mode-badge" id="fc-mode-badge">⚡ Flash</span>
-              <span id="fc-chip">Flashcard</span>
+
+          <!--
+            ┌─────────────── Soil Mechanics ───────────────┐  ← LINE 1: .qb-l1
+            │ 1/100  ✔Finish │ [✓][✗][↦] │ 00:26  ✕Quit  │  ← LINE 2: .qb-l2
+            └──────── progress ════════ ratio ────────────┘  ← LINE 3: .qb-l3
+          -->
+          <div class="qbar" id="fc-qbar">
+
+            <!-- LINE 1: topic -->
+            <div class="qb-l1">
+              <span class="qb-mode-pill" id="fc-mode-pill">⚡ Flash</span>
+              <span class="qb-topic" id="fc-chip">Flashcard</span>
             </div>
-            <div class="qbar-body">
+
+            <!-- LINE 2: three zones -->
+            <div class="qb-l2">
+
               <!-- LEFT: counter + finish -->
-              <div class="qbar-left">
-                <div class="qbar-ctr" id="fc-ctr">1/0</div>
-                <button class="qbar-finish" onclick="QUIZ.fcFinish()">✔ Finish</button>
+              <div class="qb-zone qbz-left">
+                <div class="qb-ctr" id="fc-ctr">1<em>/0</em></div>
+                <button class="qb-act finish" onclick="QUIZ.fcFinish()">✔ Finish</button>
               </div>
-              <!-- CENTER: 3 stat boxes as in sketch -->
-              <div class="qbar-stats">
-                <div class="qstat qs-ok">
-                  <div class="qstat-icon">✓</div>
-                  <div class="qstat-val" id="fc-ok-v">0</div>
-                  <div class="qstat-lbl">Right</div>
-                </div>
-                <div class="qstat qs-bad">
-                  <div class="qstat-icon">✗</div>
-                  <div class="qstat-val" id="fc-bad-v">0</div>
-                  <div class="qstat-lbl">Wrong</div>
-                </div>
-                <div class="qstat qs-skip">
-                  <div class="qstat-icon">↦</div>
-                  <div class="qstat-val" id="fc-skip-v">0</div>
-                  <div class="qstat-lbl">Skip</div>
+
+              <!-- CENTER: 3 stat squares -->
+              <div class="qb-zone qbz-center">
+                <div class="qb-stats">
+                  <div class="qst qst-ok">
+                    <span class="qst-sym">✓</span>
+                    <span class="qst-n" id="fc-ok-v">0</span>
+                    <span class="qst-lb">Right</span>
+                  </div>
+                  <div class="qst qst-bad">
+                    <span class="qst-sym">✗</span>
+                    <span class="qst-n" id="fc-bad-v">0</span>
+                    <span class="qst-lb">Wrong</span>
+                  </div>
+                  <div class="qst qst-skip">
+                    <span class="qst-sym">↦</span>
+                    <span class="qst-n" id="fc-skip-v">0</span>
+                    <span class="qst-lb">Skip</span>
+                  </div>
                 </div>
               </div>
+
               <!-- RIGHT: timer + quit -->
-              <div class="qbar-right">
-                <div class="qbar-timer ticking" id="fc-tmr">00:00</div>
-                <button class="qbar-quit" onclick="QUIZ.quit()">✕ Quit</button>
+              <div class="qb-zone qbz-right">
+                <div class="qb-timer" id="fc-tmr">00:00</div>
+                <button class="qb-act quit" onclick="QUIZ.quit()">✕ Quit</button>
               </div>
-            </div>
-            <div class="qbar-foot">
+
+            </div><!-- /qb-l2 -->
+
+            <!-- LINE 3: progress bars -->
+            <div class="qb-l3">
               <div class="qprog"><div class="qpf" id="fc-pf"></div></div>
               <div class="rbar"><div class="rbar-g" id="rg"></div><div class="rbar-r" id="rr"></div><div class="rbar-s" id="rs"></div></div>
             </div>
-          </div>
 
+          </div><!-- /qbar -->
+
+          <!-- Question card -->
           <div class="qcard" id="fc-card">
             <div class="qm">
               <span class="qn mono" id="fc-qn">Q1</span>
@@ -878,51 +854,72 @@ input[type=file]:hover{border-color:var(--neon)}
             <div class="qt" id="fc-qt"></div>
             <div id="fc-opts"></div>
             <div class="expl" id="fc-expl"></div>
+            <!-- Search panel: question + options -->
+            <div class="srch-wrap" id="fc-srch">
+              <div class="srch-inp-row">
+                <input class="srch-inp" id="fc-srch-inp" type="text" placeholder="Edit search query…" onkeydown="if(event.key==='Enter')SRCH.run('fc')">
+                <button class="srch-btn" onclick="SRCH.run('fc')">🔍 Search</button>
+              </div>
+              <div class="srch-links" id="fc-srch-links"></div>
+            </div>
           </div>
+
+          <!-- Nav footer -->
           <div class="fc-nav">
             <button class="btn btn-c" id="fc-prev" onclick="QUIZ.fcNav(-1)">← Prev</button>
-            <span class="fc-hint" id="fc-hint">Answer to continue</span>
+            <span class="fc-hint" id="fc-hint">Tap an option to answer</span>
             <button class="btn btn-c" id="fc-next" onclick="QUIZ.fcNav(1)">Next →</button>
           </div>
-        </div>
+        </div><!-- /fc-wrap -->
 
-        <!-- ── EXAM MODE ── -->
+        <!-- ─── EXAM ─── -->
         <div id="ex-wrap" style="display:none">
-          <!-- NEW EXAM BAR: same sketch structure -->
-          <div class="qbar">
-            <div class="qbar-title">
-              <span class="qbar-mode-badge" id="ex-mode-badge">📝 Exam</span>
-              <span id="ex-chip">Exam</span>
+
+          <div class="qbar" id="ex-qbar">
+
+            <!-- LINE 1 -->
+            <div class="qb-l1">
+              <span class="qb-mode-pill" id="ex-mode-pill">📝 Exam</span>
+              <span class="qb-topic" id="ex-chip">Exam</span>
             </div>
-            <div class="qbar-body">
-              <!-- LEFT -->
-              <div class="qbar-left">
-                <div class="qbar-exam-ctr" id="ex-ctr">0/0</div>
-                <button class="qbar-submit" onclick="QUIZ.submitExam()">✔ Submit</button>
+
+            <!-- LINE 2 -->
+            <div class="qb-l2">
+
+              <div class="qb-zone qbz-left">
+                <div class="qb-ctr" id="ex-ctr">0<em>/0</em></div>
+                <button class="qb-act submit" onclick="QUIZ.submitExam()">✔ Submit</button>
               </div>
-              <!-- CENTER: answered count box (exam has 1 main stat) -->
-              <div class="qbar-stats">
-                <div class="qstat qs-ok" style="width:60px">
-                  <div class="qstat-icon">✓</div>
-                  <div class="qstat-val" id="ex-ans-v">0</div>
-                  <div class="qstat-lbl">Done</div>
+
+              <div class="qb-zone qbz-center">
+                <div class="qb-stats">
+                  <div class="qst qst-ans">
+                    <span class="qst-sym">✓</span>
+                    <span class="qst-n" id="ex-ans-v">0</span>
+                    <span class="qst-lb">Done</span>
+                  </div>
                 </div>
               </div>
-              <!-- RIGHT -->
-              <div class="qbar-right">
-                <div class="qbar-timer ticking" id="ex-tmr">00:00</div>
-                <button class="qbar-quit" onclick="QUIZ.quit()">✕ Quit</button>
+
+              <div class="qb-zone qbz-right">
+                <div class="qb-timer" id="ex-tmr">00:00</div>
+                <button class="qb-act quit" onclick="QUIZ.quit()">✕ Quit</button>
               </div>
+
             </div>
-            <div class="qbar-foot">
+
+            <!-- LINE 3 -->
+            <div class="qb-l3">
               <div class="qprog"><div class="qpf" id="ex-pf"></div></div>
             </div>
-          </div>
+
+          </div><!-- /qbar exam -->
+
           <div id="ex-qs"></div>
           <div style="text-align:center;margin:1rem 0 1.5rem">
             <button class="btn btn-solid btn-lg" onclick="QUIZ.submitExam()">📝 Submit All Answers</button>
           </div>
-        </div>
+        </div><!-- /ex-wrap -->
 
         <!-- RESULT -->
         <div id="res-wrap" style="display:none">
@@ -946,33 +943,21 @@ input[type=file]:hover{border-color:var(--neon)}
     </div><!-- /main -->
   </div><!-- /layout -->
 
-  <!-- ═══════ BOTTOM NAV — MOBILE ONLY ═══════ -->
+  <!-- BOTTOM NAV -->
   <nav id="bnav">
     <div class="bnav-row">
-      <button class="bnav-btn active" id="bnav-home" onclick="UI.go('home')">
-        <span class="bic">🏠</span><span>Home</span>
-      </button>
-      <button class="bnav-btn" id="bnav-online" onclick="UI.go('online')">
-        <span class="bic">☁️</span><span>Study</span>
-      </button>
-      <button class="bnav-btn" id="bnav-psycho" onclick="UI.go('psycho')">
-        <span class="bic">⚡</span><span>Psycho</span>
-      </button>
-      <button class="bnav-btn" id="bnav-wrong" onclick="UI.go('wrong')">
-        <span class="bic">❌</span><span>Wrong</span>
-      </button>
-      <button class="bnav-btn" id="bnav-progress" onclick="UI.go('progress')">
-        <span class="bic">📊</span><span>Progress</span>
-      </button>
+      <button class="bnav-btn active" id="bnav-home" onclick="UI.go('home')"><span class="bic">🏠</span><span>Home</span></button>
+      <button class="bnav-btn" id="bnav-online" onclick="UI.go('online')"><span class="bic">☁️</span><span>Study</span></button>
+      <button class="bnav-btn" id="bnav-psycho" onclick="UI.go('psycho')"><span class="bic">⚡</span><span>Psycho</span></button>
+      <button class="bnav-btn" id="bnav-wrong" onclick="UI.go('wrong')"><span class="bic">❌</span><span>Wrong</span></button>
+      <button class="bnav-btn" id="bnav-progress" onclick="UI.go('progress')"><span class="bic">📊</span><span>Progress</span></button>
     </div>
   </nav>
 
 </div><!-- /app -->
 
-<!-- TOASTS -->
 <div id="toasts"></div>
 
-<!-- MODAL -->
 <div class="mbg" id="mbg" onclick="closeMod()">
   <div class="mbox" onclick="event.stopPropagation()">
     <div class="mhd"><h3 id="mtitle">—</h3><button class="mcl" onclick="closeMod()">✕</button></div>
@@ -984,181 +969,241 @@ input[type=file]:hover{border-color:var(--neon)}
 <script src="chapters-data.js"></script>
 <script src="app.js"></script>
 
-<!-- ════════════════════════════════════════════════════
-     UI ENHANCEMENT PATCH
-     Layered on top of existing app.js — no changes to
-     app.js required. Patches rendering functions to use
-     the new quiz bar element IDs.
-════════════════════════════════════════════════════ -->
 <script>
+/* ════════════════════════════════════════════════════════
+   PATCH LAYER — No changes to app.js required
+   Hooks into existing functions after they load.
+════════════════════════════════════════════════════════ */
 (function(){
 'use strict';
 
-/* ── 1. BOTTOM NAV SYNC ── */
-const BNAV = {
-  home:'bnav-home', online:'bnav-online', psycho:'bnav-psycho',
-  wrong:'bnav-wrong', progress:'bnav-progress'
-};
-const _uiGo = UI.go.bind(UI);
-UI.go = function(v){
+/* ── 1. BOTTOM NAV sync ── */
+const BNAV_MAP={home:'bnav-home',online:'bnav-online',psycho:'bnav-psycho',wrong:'bnav-wrong',progress:'bnav-progress'};
+const _uiGo=UI.go.bind(UI);
+UI.go=function(v){
   _uiGo(v);
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
-  const btn = document.getElementById(BNAV[v]);
-  if(btn) btn.classList.add('active');
-  const bnav = document.getElementById('bnav');
-  if(bnav) bnav.style.display = '';
+  const b=document.getElementById(BNAV_MAP[v]);if(b)b.classList.add('active');
+  const bnav=document.getElementById('bnav');if(bnav)bnav.style.display='';
 };
 
-/* ── 2. HIDE BOTTOM NAV DURING QUIZ ── */
-const _startWith = QUIZ.startWith.bind(QUIZ);
-QUIZ.startWith = function(...a){
-  const bnav = document.getElementById('bnav');
-  if(bnav) bnav.style.display = 'none';
-  _startWith(...a);
-  // Update new quiz bar chapter name
-  const ch = a[2] || 'Quiz';
-  const fcs = document.getElementById('fc-chip');
-  const exs = document.getElementById('ex-chip');
-  if(fcs) fcs.textContent = ch;
-  if(exs) exs.textContent = ch;
+/* ── 2. Hide bottom nav during quiz ── */
+const _startWith=QUIZ.startWith.bind(QUIZ);
+QUIZ.startWith=function(qs,mode,ch){
+  const bnav=document.getElementById('bnav');if(bnav)bnav.style.display='none';
+  _startWith(qs,mode,ch);
+  /* update LINE 1 topic in both bars immediately after app.js runs */
+  const name=ch||'Quiz';
+  ['fc-chip','ex-chip'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent=name;});
+  ['fc-mode-pill','ex-mode-pill'].forEach((id,i)=>{const e=document.getElementById(id);if(e)e.textContent=i===0?'⚡ Flash':'📝 Exam';});
+  /* also update new counter on init */
+  _patch_fc_ctr();
 };
-function _showBnav(){
-  const b = document.getElementById('bnav'); if(b) b.style.display = '';
+
+function _showBnav(){const b=document.getElementById('bnav');if(b)b.style.display='';}
+const _fcF=QUIZ.fcFinish.bind(QUIZ);QUIZ.fcFinish=function(){_fcF();_showBnav();};
+const _quit=QUIZ.quit.bind(QUIZ);QUIZ.quit=function(){_quit();_showBnav();};
+
+/* ── 3. Counter display: "1/100" exact format ── */
+function _patch_fc_ctr(){
+  const el=document.getElementById('fc-ctr');
+  if(!el||!S.quiz.qs)return;
+  const cur=S.quiz.idx+1,tot=S.quiz.qs.length;
+  el.innerHTML=cur+'<em>/'+tot+'</em>';
+  /* also progress bar */
+  const pf=document.getElementById('fc-pf');
+  if(pf)pf.style.width=(((cur-1)/tot)*100)+'%';
 }
-const _fcFinish = QUIZ.fcFinish.bind(QUIZ);
-QUIZ.fcFinish = function(){ _fcFinish(); _showBnav(); };
-const _quit = QUIZ.quit.bind(QUIZ);
-QUIZ.quit = function(){ _quit(); _showBnav(); };
 
-/* ── 3. PATCH _updateFcCounts to drive new stat boxes ── */
-const _updateFcCounts = QUIZ._updateFcCounts.bind(QUIZ);
-QUIZ._updateFcCounts = function(){
-  // call original (keeps rbar working)
-  _updateFcCounts();
-  // drive new boxes
+/* ── 4. Patch _renderFlashcard ── */
+const _renderFlashcard=QUIZ._renderFlashcard.bind(QUIZ);
+QUIZ._renderFlashcard=function(){
+  _renderFlashcard();
+  _patch_fc_ctr();
+  /* sync topic name (app.js writes fc-chip with '⚡ ' prefix, strip it) */
+  const chip=document.getElementById('fc-chip');
+  if(chip&&chip.textContent.startsWith('⚡ ')){
+    chip.textContent=chip.textContent.replace('⚡ ','');
+  }
+  /* update search panel pre-fill */
+  _srch_prefill('fc');
+};
+
+/* ── 5. Patch _updateFcCounts → drive 3 stat tiles ── */
+const _upd=QUIZ._updateFcCounts.bind(QUIZ);
+QUIZ._updateFcCounts=function(){
+  _upd();
   let ok=0,bad=0,skip=0;
   S.quiz.ans.forEach((a,i)=>{
-    if(a===null){ if(S.quiz.shown?.has(i)) skip++; return; }
-    if(isOk(a, S.quiz.qs[i].correct)) ok++; else bad++;
+    if(a===null){if(S.quiz.shown?.has(i))skip++;return;}
+    if(isOk(a,S.quiz.qs[i].correct))ok++;else bad++;
   });
-  const sv = (id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
-  sv('fc-ok-v', ok); sv('fc-bad-v', bad); sv('fc-skip-v', skip);
-  // Also update chip text (hidden in new design, but keep for compat)
-  sv('fc-ok','✅ '+ok); sv('fc-bad','❌ '+bad); sv('fc-skip','⏭ '+skip);
-};
-
-/* ── 4. PATCH exam answer count ── */
-const _exAnswer = QUIZ.exAnswer.bind(QUIZ);
-QUIZ.exAnswer = function(qi,oi){
-  _exAnswer(qi,oi);
-  const answered = S.quiz.ans.filter(a=>a!==null).length;
-  const ev = document.getElementById('ex-ans-v');
-  if(ev) ev.textContent = answered;
-  // timer color: urgent if < 20% time left
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  set('fc-ok-v',ok);set('fc-bad-v',bad);set('fc-skip-v',skip);
+  /* ratio bar */
+  const tot=S.quiz.qs.length;
+  const rg=document.getElementById('rg'),rr=document.getElementById('rr');
+  if(rg)rg.style.flex=ok;
+  if(rr)rr.style.flex=bad;
+  /* timer urgent */
   if(S.quiz.mode==='exam'){
-    const t = document.getElementById('ex-tmr');
-    if(t){ t.classList.toggle('urgent', S.quiz.left < S.quiz.qs.length*9); }
+    const t=document.getElementById('ex-tmr');
+    if(t)t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18);
   }
 };
 
-/* ── 5. PATCH timer to drive new elements + urgent state ── */
-const _startTimer = QUIZ._startTimer.bind(QUIZ);
-QUIZ._startTimer = function(){
+/* ── 6. Exam render patch: counter + answered tile ── */
+const _renderExam=QUIZ._renderExam.bind(QUIZ);
+QUIZ._renderExam=function(){
+  _renderExam();
+  const c=document.getElementById('ex-ctr'),tot=S.quiz.qs.length;
+  if(c)c.innerHTML='0<em>/'+tot+'</em>';
+  const chip=document.getElementById('ex-chip');
+  if(chip)chip.textContent=S.quiz.ch||'Exam';
+};
+
+const _exAns=QUIZ.exAnswer.bind(QUIZ);
+QUIZ.exAnswer=function(qi,oi){
+  _exAns(qi,oi);
+  const ans=S.quiz.ans.filter(a=>a!==null).length,tot=S.quiz.qs.length;
+  const av=document.getElementById('ex-ans-v');if(av)av.textContent=ans;
+  const ctr=document.getElementById('ex-ctr');
+  if(ctr)ctr.innerHTML=ans+'<em>/'+tot+'</em>';
+  const pf=document.getElementById('ex-pf');
+  if(pf)pf.style.width=((ans/tot)*100)+'%';
+  const t=document.getElementById('ex-tmr');
+  if(t)t.classList.toggle('urgent',S.quiz.left<tot*18);
+};
+
+/* ── 7. Timer urgent watch ── */
+const _startTimer=QUIZ._startTimer.bind(QUIZ);
+QUIZ._startTimer=function(){
   _startTimer();
-  // Add urgent class hook via interval override
-  const origTimer = S.quiz.timer;
-  // Timer already started; we augment via a watch interval
-  const watch = setInterval(()=>{
-    if(!S.quiz.active){ clearInterval(watch); return; }
+  const w=setInterval(()=>{
+    if(!S.quiz?.active){clearInterval(w);return;}
     if(S.quiz.mode==='exam'){
       const t=document.getElementById('ex-tmr');
-      if(t){ t.classList.toggle('urgent', S.quiz.left < S.quiz.qs.length*9); }
+      if(t)t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18);
     }
-  }, 1000);
+  },1000);
 };
 
-/* ── 6. PATCH _renderFlashcard to update new ctr element ── */
-const _renderFlashcard = QUIZ._renderFlashcard.bind(QUIZ);
-QUIZ._renderFlashcard = function(){
-  _renderFlashcard();
-  // Update new counter
-  const ctr = document.getElementById('fc-ctr');
-  if(ctr) ctr.textContent = `${S.quiz.idx+1}/${S.quiz.qs.length}`;
-};
-
-/* ── 7. PATCH exam render to update new elements ── */
-const _renderExam = QUIZ._renderExam.bind(QUIZ);
-QUIZ._renderExam = function(){
-  _renderExam();
-  const chip = document.getElementById('ex-chip');
-  if(chip) chip.textContent = S.quiz.ch;
-  const mb = document.getElementById('ex-mode-badge');
-  if(mb) mb.textContent = '📝 Exam';
-};
-
-/* ── 8. RICHER DASHBOARD ── */
-const _homeRender = HOME.render.bind(HOME);
-HOME.render = function(){
+/* ── 8. Dashboard: greeting + recent sessions ── */
+const _homeRender=HOME.render.bind(HOME);
+HOME.render=function(){
   _homeRender();
-  const h = new Date().getHours();
-  const greets=[
-    {t:'Burning midnight oil?',i:'🌙',r:[0,5]},
-    {t:'Good morning!',i:'🌅',r:[5,12]},
-    {t:'Good afternoon!',i:'☀️',r:[12,17]},
-    {t:'Good evening!',i:'🌆',r:[17,21]},
-    {t:'Working late?',i:'🌙',r:[21,24]}
-  ];
-  const g = greets.find(x=>h>=x.r[0]&&h<x.r[1])||greets[1];
-  const te=document.getElementById('greeting-title'), ie=document.getElementById('greeting-icon');
-  if(te) te.textContent=g.t;
-  if(ie) ie.textContent=g.i;
+  const h=new Date().getHours();
+  const G=[{t:'Burning midnight oil?',i:'🌙',r:[0,5]},{t:'Good morning!',i:'🌅',r:[5,12]},{t:'Good afternoon!',i:'☀️',r:[12,17]},{t:'Good evening!',i:'🌆',r:[17,21]},{t:'Working late?',i:'🌙',r:[21,24]}];
+  const g=G.find(x=>h>=x.r[0]&&h<x.r[1])||G[1];
+  const te=document.getElementById('greeting-title'),ie=document.getElementById('greeting-icon');
+  if(te)te.textContent=g.t;if(ie)ie.textContent=g.i;
+  _renderRecentSessions();
 };
 
-/* ── 9. RICHER RECENT SESSIONS ── */
-const _renderRecent = HOME.renderRecent.bind(HOME);
-HOME.renderRecent = function(){
-  const el = document.getElementById('recent-sessions');
-  if(!el) return;
-  const sessions = S.prog.sessions.slice(0,5);
-  if(!sessions.length){
-    el.innerHTML='<div class="empty"><div class="empty-i">📈</div><p>No sessions yet — start a quiz!</p></div>';
-    return;
-  }
-  const modeIc = m => m==='exam'?'📝':m==='flashcard'?'⚡':'📊';
-  el.innerHTML = sessions.map(s=>{
-    const ic = (s.chapter||'').includes('Wrong')?'❌':(s.chapter||'').includes('Daily')?'🌟':modeIc(s.mode);
-    const cls = s.pct>=70?'tg':s.pct>=40?'ta':'tr';
-    const dt = new Date(s.at).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `<div class="sess-row">
-      <span class="sess-ic">${ic}</span>
-      <div class="sess-info">
-        <div class="sess-ch">${esc(s.chapter||'Study')}</div>
-        <div class="sess-ts">${dt}</div>
-      </div>
-      <span class="ctag ${cls}">${s.pct}%</span>
-    </div>`;
+function _renderRecentSessions(){
+  const el=document.getElementById('recent-sessions');if(!el)return;
+  const ss=S.prog.sessions.slice(0,5);
+  if(!ss.length){el.innerHTML='<div class="empty"><div class="empty-i">📈</div><p>No sessions yet — start a quiz!</p></div>';return;}
+  const mIc=m=>m==='exam'?'📝':m==='flashcard'?'⚡':'📊';
+  el.innerHTML=ss.map(s=>{
+    const ic=(s.chapter||'').includes('Wrong')?'❌':(s.chapter||'').includes('Daily')?'🌟':mIc(s.mode);
+    const cls=s.pct>=70?'tg':s.pct>=40?'ta':'tr';
+    const dt=new Date(s.at).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="sess-row"><span class="sess-ic">${ic}</span><div class="sess-info"><div class="sess-ch">${esc(s.chapter||'Study')}</div><div class="sess-ts">${dt}</div></div><span class="ctag ${cls}">${s.pct}%</span></div>`;
   }).join('');
+}
+
+/* ── 9. SEARCH: prefill & multi-engine links ── */
+function _srch_prefill(prefix){
+  const qEl=S.quiz.qs?.[S.quiz.idx];if(!qEl)return;
+  /* Build query: question text + all options joined */
+  const optText=(qEl.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join(' | ');
+  const fullQ=qEl.q+' '+optText;
+  const inp=document.getElementById(prefix+'-srch-inp');
+  if(inp)inp.value=fullQ;
+}
+window.SRCH={
+  run(prefix){
+    const inp=document.getElementById(prefix+'-srch-inp');
+    if(!inp)return;
+    const q=encodeURIComponent(inp.value.trim());
+    if(!q)return;
+    const container=document.getElementById(prefix+'-srch-links');
+    if(!container)return;
+    container.innerHTML=`
+      <a class="srch-link sl-g" href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener">🔍 Google</a>
+      <a class="srch-link sl-y" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">▶ YouTube</a>
+      <a class="srch-link sl-w" href="https://en.wikipedia.org/w/index.php?search=${q}" target="_blank" rel="noopener">📖 Wikipedia</a>
+      <a class="srch-link sl-c" href="https://www.google.com/search?q=${q}+nepal+loksewa" target="_blank" rel="noopener">🇳🇵 Loksewa</a>
+    `;
+  },
+  toggle(prefix){
+    const w=document.getElementById(prefix+'-srch');
+    if(!w)return;
+    const open=w.classList.toggle('open');
+    if(open)_srch_prefill(prefix);
+  }
 };
 
-/* ── 10. SWIPE RIGHT FROM LEFT EDGE → OPEN SIDEBAR ── */
-let tx=0,ty=0;
-document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+/* Patch _renderFlashcard search icon to use new SRCH.toggle */
+/* app.js generates the actions row; we monkey-patch after render */
+const __renderFlashcard=QUIZ._renderFlashcard.bind(QUIZ);
+QUIZ._renderFlashcard=function(){
+  __renderFlashcard();
+  /* replace the old Google link with new search toggle button */
+  const acts=document.getElementById('fc-acts');
+  if(acts){
+    /* find and replace the 🔍 anchor if present */
+    const oldA=acts.querySelector('a.ib');
+    if(oldA){
+      const btn=document.createElement('button');
+      btn.className='ib';btn.title='Search (Q + options)';
+      btn.innerHTML='🔍';
+      btn.onclick=()=>SRCH.toggle('fc');
+      oldA.replaceWith(btn);
+    }
+  }
+  _patch_fc_ctr();
+  _srch_prefill('fc');
+};
+
+/* ── 10. Swipe right from left edge → open sidebar ── */
+let _tx=0,_ty=0;
+document.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;},{passive:true});
 document.addEventListener('touchend',e=>{
-  const dx=e.changedTouches[0].clientX-tx, dy=Math.abs(e.changedTouches[0].clientY-ty);
-  if(tx<22&&dx>60&&dy<70) UI.sidebarToggle();
+  const dx=e.changedTouches[0].clientX-_tx,dy=Math.abs(e.changedTouches[0].clientY-_ty);
+  if(_tx<22&&dx>60&&dy<70)UI.sidebarToggle();
 },{passive:true});
 
-/* ── 11. ESC closes sidebar / modal ── */
+/* ── 11. ESC closes modal / sidebar ── */
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     UI.sidebarClose();
-    if(document.getElementById('mbg')?.classList.contains('show')) closeMod();
+    const m=document.getElementById('mbg');if(m&&m.classList.contains('show'))closeMod();
+    const srch=document.getElementById('fc-srch');if(srch&&srch.classList.contains('open'))srch.classList.remove('open');
   }
 });
 
-/* ── 12. KEEP LEGACY CHIP IDs working (app.js writes to them) ── */
-// app.js writes fc-chip for the chapter label — redirect to new element
-// (already handled in startWith patch above via fc-chip span inside title)
+/* ── 12. REV renderList: show question text AND options ── */
+const _revRender=REV.renderList.bind(REV);
+REV.renderList=function(kind){
+  const arr=REV._store(kind);
+  const el=document.getElementById(REV._listEl(kind));
+  if(!el)return;
+  if(!arr.length){
+    el.innerHTML=`<div class="empty"><div class="empty-i">${kind==='bk'?'⭐':kind==='fl'?'🚩':'❌'}</div><p>Nothing here yet</p></div>`;
+    return;
+  }
+  el.innerHTML=arr.map((q,i)=>{
+    const opts=(q.options||[]).map((o,j)=>`<div class="eo${j===Number(q.correct)||String(j)===String(q.correct)?' shc':''}">${String.fromCharCode(65+j)}) ${esc(o)}</div>`).join('');
+    return `<div class="qcard" style="margin-bottom:.6rem">
+      <div class="qm"><span class="qn mono">#${i+1}</span><button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid)}')">🗑</button></div>
+      <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
+      <div style="margin-top:.35rem">${opts}</div>
+      ${q.explanation?`<div class="expl show" style="margin-top:.5rem">${esc(q.explanation)}</div>`:''}
+    </div>`;
+  }).join('');
+};
 
 })();
 </script>
