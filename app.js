@@ -514,13 +514,21 @@ const PSY = {
           <div class="ch-cnt">${fc}f</div>
         </div>`;
       }).join('');
-      return `<div class="sb-lbl" style="margin-top:.7rem">${label}</div>
-        <div class="ch-list">${items || '<div class="empty"><div class="empty-i">📚</div><p>No chapters yet</p></div>'}</div>`;
+      return `<div class="sb-lbl" style="margin-top:.7rem;display:flex;align-items:center;justify-content:space-between;padding-right:.2rem">
+          <span>${label}</span>
+          <span style="display:flex;gap:.3rem">
+            <button class="btn btn-sm btn-c" style="font-size:.56rem;padding:.15rem .4rem" onclick="PSY.allLv('${lv}')">✅ All</button>
+            <button class="btn btn-sm btn-r" style="font-size:.56rem;padding:.15rem .4rem" onclick="PSY.noneLv('${lv}')">✕</button>
+          </span>
+        </div>
+        <div class="ch-list" id="psy-lv-${lv}">${items || '<div class="empty"><div class="empty-i">📚</div><p>No chapters yet</p></div>'}</div>`;
     }).join('');
     PSY._info();
   },
   all(){document.querySelectorAll('#psy-levels input:not(:disabled)').forEach(c=>c.checked=true);PSY._info()},
   none(){document.querySelectorAll('#psy-levels input').forEach(c=>c.checked=false);PSY._info()},
+  allLv(lv){document.querySelectorAll(`#psy-lv-${lv} input:not(:disabled)`).forEach(c=>c.checked=true);PSY._info()},
+  noneLv(lv){document.querySelectorAll(`#psy-lv-${lv} input`).forEach(c=>c.checked=false);PSY._info()},
   _info(){
     const n=document.querySelectorAll('#psy-levels input:checked').length;
     document.getElementById('psy-info').textContent=n?`${n} chapter${n>1?'s':''} selected — ready to load`:'Select at least 1 chapter to continue';

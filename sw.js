@@ -1,88 +1,64 @@
 /* ═══════════════════════════════════════════════════════════════
-   SW.JS — Service Worker for HAMRO AFNAI
-   ───────────────────────────────────────────────────────────────
-   This MUST be a real file served from the same origin as
-   index.html (not a Blob URL). Blob-URL service workers are
-   unreliable for installability and don't survive reliably across
-   reloads in several browsers — that was a bug in the previous
-   version of this app. A real file fixes both PWA installability
-   and the "feel like a native app" full-screen experience.
-
+   SW.JS — HAMRO AFNAI  Service Worker  v2
    Strategy:
-   - App shell (HTML/CSS/JS) → cache-first, so the UI itself opens
-     instantly offline, even on first load after install.
-   - Google Apps Script / Drive requests (question data) →
-     network-first with cache fallback, so users always get fresh
-     content when online but still get *something* offline if
-     they've studied that set before (app.js also keeps its own
-     localStorage cache of question JSON, which is the primary
-     offline data store — this SW cache is a second safety net).
+   • App shell  → cache-first, instant offline open
+   • API/Drive  → network-first, localStorage fallback (app.js handles this)
+   • Cache bust → increment CACHE_NAME when deploying new shell files
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'ha-shell-v1';
-const SHELL_FILES = [
+const CACHE_NAME = 'ha-shell-v2';
+const SHELL = [
   './',
   './index.html',
   './app.js',
   './chapters-data.js',
-  './manifest.json'
+  './manifest.json',
+  './sw.js'
 ];
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES)).catch(()=>{})
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(c => c.addAll(SHELL))
+      .catch(() => {}) // don't fail install if a resource 404s
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = event.request.url;
+self.addEventListener('fetch', e => {
+  const url = e.request.url;
 
-  // Question-data / auth API calls: network-first, cache fallback.
+  // API calls: network-only (app.js caches question JSON in localStorage)
   if (url.includes('script.google.com') || url.includes('googleapis.com')) {
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(event.request, copy));
-          }
-          return res;
-        })
-        .catch(() =>
-          caches.match(event.request).then(
-            (r) => r || new Response(JSON.stringify({ success: false, error: 'Offline and not cached' }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            })
-          )
-        )
+    e.respondWith(
+      fetch(e.request.clone())
+        .catch(() => new Response(
+          JSON.stringify({success:false, error:'Offline — use cached data'}),
+          {status:200, headers:{'Content-Type':'application/json'}}
+        ))
     );
     return;
   }
 
-  // App shell: cache-first, network fallback, then update cache in background.
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const fetchPromise = fetch(event.request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(event.request, copy));
-          }
-          return res;
-        })
-        .catch(() => cached || new Response('Offline', { status: 503 }));
-      return cached || fetchPromise;
+  // App shell: cache-first, background update
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      const net = fetch(e.request).then(res => {
+        if (res.ok) {
+          caches.open(CACHE_NAME).then(c => c.put(e.request, res.clone()));
+        }
+        return res;
+      }).catch(() => cached || new Response('Offline', {status:503}));
+      return cached || net;
     })
   );
 });
