@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   SW.JS — HAMRO AFNAI  Service Worker  v2
+   SW.JS — HAMRO AFNAI  Service Worker  v2.1 (bug‑fixed)
    Strategy:
    • App shell  → cache-first, instant offline open
    • API/Drive  → network-first, localStorage fallback (app.js handles this)
@@ -20,7 +20,7 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME)
       .then(c => c.addAll(SHELL))
-      .catch(() => {}) // don't fail install if a resource 404s
+      .catch(err => console.warn('SW install: some shell files could not be cached', err))
   );
   self.skipWaiting();
 });
@@ -37,8 +37,10 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // API calls: network-only (app.js caches question JSON in localStorage)
-  if (url.includes('script.google.com') || url.includes('googleapis.com')) {
+  // Only intercept actual API calls (your Apps Script endpoint).
+  // Fonts and other Google services are left to the browser's normal
+  // network stack so they can be cached by the font provider's CDN.
+  if (url.includes('script.google.com')) {
     e.respondWith(
       fetch(e.request.clone())
         .catch(() => new Response(
