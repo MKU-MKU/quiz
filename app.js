@@ -17,7 +17,7 @@
 
 /* ═══════════════ 1. CONFIG & CONSTANTS ═══════════════ */
 const APP_CONFIG = {
-  APPS_URL: "https://script.google.com/macros/s/AKfycbxHYl7q0fGYroKHGkGGTC2O4QQDLD_8l-VItmeHzsO10Ve_G8nqok_3EWH92QOWUOAw5w/exec",
+  APPS_URL: "https://script.google.com/macros/s/AKfycbyTy8rWkZ3hRAjKXCx2tsOQ-EHAUUkvjXpJ6YSBBv9z51YttXN8rr7oo7CneyyYgeAA/exec",
   SESSION_DAYS: 30
 };
 const APPS = APP_CONFIG.APPS_URL;
