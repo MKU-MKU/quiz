@@ -238,14 +238,37 @@ function adminDeleteUser(p) {
    CONTENT API — serves question-bank files stored on Google Drive
 ═══════════════════════════════════════════════════════════════ */
 function getFileContents(p) {
-  const fileId = p.fileId;
+  const fileId = (p.fileId || "").trim();
   if (!fileId) return { success: false, error: "Missing fileId." };
   try {
     const file = DriveApp.getFileById(fileId);
-    const text = file.getBlob().getDataAsString("UTF-8");
-    // Return raw JSON parsed, so the client gets an array/object directly
-    return JSON.parse(text);
+    // Verify file is accessible (shared correctly)
+    const sharing = file.getSharingAccess();
+    if (sharing === DriveApp.Access.PRIVATE) {
+      return { success: false, error: "File is private. Set sharing to 'Anyone with the link' in Google Drive." };
+    }
+    const text = file.getBlob().getDataAsString("UTF-8").trim();
+    if (!text) return { success: false, error: "File is empty." };
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      return { success: false, error: "File does not contain valid JSON. Parse error: " + e.message };
+    }
+    // If the file itself contained a stringified JSON (double-encoded), unwrap it
+    if (typeof parsed === "string") {
+      try { parsed = JSON.parse(parsed); } catch(e) { /* leave as-is */ }
+    }
+    return parsed;
   } catch (err) {
-    return { success: false, error: "Could not read file: " + err.message };
+    // Provide a clearer error if it's a permissions issue
+    const msg = err.message || "";
+    if (msg.includes("No item with the given ID") || msg.includes("cannot find file")) {
+      return { success: false, error: "File not found. Check the Drive file ID in chapters-data.js." };
+    }
+    if (msg.includes("Access denied") || msg.includes("permission")) {
+      return { success: false, error: "Permission denied. Make sure the file is shared as 'Anyone with the link'." };
+    }
+    return { success: false, error: "Could not read file: " + msg };
   }
 }
