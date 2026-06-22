@@ -59,8 +59,14 @@ function isOk(sel,cor){
 }
 function normQ(raw,fid){
   const a=Array.isArray(raw)?raw:(raw?.questions||raw?.data||[]);
-  if(!Array.isArray(a))return [];
-  return a.filter(q=>q&&(q.q||q.question)&&Array.isArray(q.options)&&q.options.length).map((q,i)=>({
+  if(!Array.isArray(a)){
+    console.warn('[normQ] Unexpected data format for', fid, '— got:', typeof raw, raw);
+    return [];
+  }
+  const valid = a.filter(q=>q&&(q.q||q.question)&&Array.isArray(q.options)&&q.options.length);
+  const skipped = a.length - valid.length;
+  if(skipped>0) console.warn(`[normQ] ${skipped}/${a.length} questions skipped (missing q/options) in ${fid}`);
+  return valid.map((q,i)=>({
     q:q.q||q.question||'',
     options:q.options||[],
     correct:q.correct!==undefined?q.correct:q.answer,
@@ -69,7 +75,7 @@ function normQ(raw,fid){
     uid:`${fid||'local'}_${i}`
   }));
 }
-function toast(msg,dur=2800){
+function toast(msg,dur=3200){
   const c=document.getElementById('toasts');
   if(!c)return;
   const t=document.createElement('div');t.className='toast';t.textContent=msg;
@@ -83,9 +89,19 @@ function openMod(title,html){
 }
 function closeMod(){document.getElementById('mbg').classList.remove('show')}
 function qs(params){return Object.entries(params).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}
-async function netFetch(url, opts){
+async function netFetch(url, opts, timeoutMs=20000){
   if(!S.online) throw new Error('OFFLINE');
-  return fetch(url, opts);
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs);
+  try{
+    const res = await fetch(url, {...(opts||{}), signal:controller.signal});
+    clearTimeout(timer);
+    return res;
+  }catch(err){
+    clearTimeout(timer);
+    if(err.name==='AbortError') throw new Error('Request timed out — the server is taking too long. Try again or check your connection.');
+    throw err;
+  }
 }
 
 /* ═══════════════ 4. AUTH ═══════════════ */
@@ -111,7 +127,7 @@ const AUTH = {
     const err=document.getElementById('lerr');
     err.style.display='none';
     if(!u||!p){AUTH._err('Enter username and password');return}
-    btn.disabled=true;btn.innerHTML='<span class="spin"></span> Verifying…';
+    btn.disabled=true;btn.innerHTML='<span class="spin"></span> Connecting to server…';
     try{
       let res;
       if(S.online){
@@ -525,17 +541,26 @@ const PSY = {
   async start(type){
     const cbs=[...document.querySelectorAll('#psy-levels input:checked')];
     if(!cbs.length){toast('Select at least one chapter');return}
-    toast(`⏳ Loading ${cbs.length} chapter${cbs.length>1?'s':''}…`);
+    const totalFiles = cbs.reduce((n,cb)=>n+Object.keys(ChapterData.files(cb.dataset.lv,cb.value)).length,0);
+    QUIZ._showLoader(`Loading ${cbs.length} chapter${cbs.length>1?'s':''} (0/${totalFiles})…`);
     const all=[];
+    let done=0,failed=0;
     for(const cb of cbs){
       const lv=cb.dataset.lv;
       const ch=cb.value;
       for(const[name,fid] of Object.entries(ChapterData.files(lv,ch))){
         if(!fid)continue;
-        try{const raw=await QUIZ._fetch(fid,`${lv}_${ch}_${name}`);all.push(...normQ(raw,fid))}catch{}
+        try{
+          const raw=await QUIZ._fetch(fid,`${lv}_${ch}_${name}`);
+          all.push(...normQ(raw,fid));
+          done++;
+          document.getElementById('quiz-loader-msg').textContent=`Loading files (${done}/${totalFiles})…`;
+        }catch{ failed++; }
       }
     }
-    if(!all.length){toast('❌ No questions loaded. Cache data first if you are offline.');return}
+    QUIZ._hideLoader();
+    if(!all.length){toast('❌ No questions loaded. Cache data first if offline.',5000);return}
+    if(failed>0) toast(`⚠️ ${failed} file${failed>1?'s':''} failed to load — starting with ${all.length} questions`);
     let qsArr=shuf(all);
     if(type==='exam')qsArr=qsArr.slice(0,100);
     if(type==='weak'){
@@ -615,36 +640,70 @@ const REV = {
 
 /* ═══════════════ 10. QUIZ ENGINE ═══════════════ */
 const QUIZ = {
-  async _fetch(fileId, cacheKey){
+  async _fetch(fileId, cacheKey, attempt=1){
     const ck = LS.QC + cacheKey;
     if(!S.online){
       const cached = _load(ck, null);
       if(cached) return cached;
-      throw new Error('No internet and no cached copy for this file.');
+      throw new Error('You are offline and this set is not cached yet. Go to the Offline Cache tab to download it while online.');
     }
     try{
-      const r = await netFetch(`${APPS}?${qs({action:'getFile', fileId})}`, {redirect:'follow'});
+      const r = await netFetch(`${APPS}?${qs({action:'getFile', fileId})}`, {redirect:'follow'}, 25000);
       const data = await r.json();
       if(data && data.success===false) throw new Error(data.error||'Server error');
       _save(ck, data);
       return data;
     } catch(err){
       const cached = _load(ck, null);
-      if(cached){ toast('📦 Loaded from offline cache'); return cached; }
+      if(cached){ toast('📦 Loaded from cache (network error)'); return cached; }
+      // Auto-retry once on timeout or network error
+      if(attempt < 2 && (err.message.includes('timed out') || err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))){
+        toast('⚠️ Slow connection — retrying…');
+        await new Promise(res => setTimeout(res, 1500));
+        return QUIZ._fetch(fileId, cacheKey, attempt + 1);
+      }
       throw err;
     }
   },
 
   async load(fileId, cacheKey, mode, chapterName){
-    toast('⏳ Loading questions…');
+    QUIZ._showLoader('Loading questions…');
     try{
       const raw = await QUIZ._fetch(fileId, cacheKey);
       const qsArr = normQ(raw, fileId);
-      if(!qsArr.length){ toast('❌ No questions found in this file'); return; }
+      QUIZ._hideLoader();
+      if(!qsArr.length){ toast('❌ No valid questions found in this file. Check the file format.'); return; }
       QUIZ.startWith(qsArr, mode, chapterName);
     } catch(err){
-      toast('❌ ' + (err.message==='OFFLINE' ? 'You are offline and this set is not cached yet.' : err.message));
+      QUIZ._hideLoader();
+      const msg = err.message==='OFFLINE'
+        ? 'You are offline and this set is not cached. Download it first from the Offline Cache tab.'
+        : err.message;
+      toast('❌ ' + msg, 5000);
     }
+  },
+
+  _showLoader(msg){
+    let el = document.getElementById('quiz-loader');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'quiz-loader';
+      el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:1rem;backdrop-filter:blur(4px)';
+      el.innerHTML = '<div style="width:44px;height:44px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--neon,#00e5ff);border-radius:50%;animation:spin 0.8s linear infinite"></div><div id="quiz-loader-msg" style="color:#fff;font-size:.9rem;font-weight:600;text-align:center;padding:0 1.5rem"></div>';
+      document.body.appendChild(el);
+      if(!document.getElementById('quiz-loader-style')){
+        const st = document.createElement('style');
+        st.id = 'quiz-loader-style';
+        st.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(st);
+      }
+    }
+    document.getElementById('quiz-loader-msg').textContent = msg || 'Loading…';
+    el.style.display = 'flex';
+  },
+  _hideLoader(){
+    const el = document.getElementById('quiz-loader');
+    if(el) el.style.display = 'none';
   },
 
   startWith(qsArr, mode, chapterName){
@@ -1212,15 +1271,23 @@ const CACHE = {
     if(!S.online){ toast('❌ You need to be online to download the cache'); return; }
     const pb=document.getElementById('cpb'), pf=document.getElementById('cpf'), txt=document.getElementById('cptxt');
     pb.style.display='';
-    let done=0;
+    let done=0, failed=0;
     for(const ref of refs){
-      txt.textContent = `Caching: ${ref.name} (${done+1}/${refs.length})`;
-      try{ await QUIZ._fetch(ref.fid, ref.key); }catch{}
+      txt.textContent = `Caching: ${ref.name} (${done+1}/${refs.length})…`;
+      pf.style.width = `${(done/refs.length)*100}%`;
+      try{
+        await QUIZ._fetch(ref.fid, ref.key);
+      }catch(err){
+        failed++;
+        txt.textContent = `⚠️ Failed: ${ref.name} — retrying…`;
+        try{ await new Promise(r=>setTimeout(r,2000)); await QUIZ._fetch(ref.fid, ref.key); failed--; }catch{}
+      }
       done++;
       pf.style.width = `${(done/refs.length)*100}%`;
     }
-    txt.textContent = `✅ Cached ${done}/${refs.length} sets`;
-    toast('✅ Offline cache updated');
+    const ok = done - failed;
+    txt.textContent = failed>0 ? `⚠️ Cached ${ok}/${refs.length} sets (${failed} failed — check connection)` : `✅ All ${done} sets cached successfully`;
+    toast(failed>0 ? `⚠️ ${ok}/${refs.length} cached — ${failed} failed` : '✅ Offline cache complete');
     CACHE.render();
   },
   clr(){

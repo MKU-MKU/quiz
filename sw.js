@@ -6,7 +6,7 @@
    • Cache bust → increment CACHE_NAME when deploying new shell files
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'ha-shell-v2';
+const CACHE_NAME = 'ha-shell-v3';
 const SHELL = [
   './',
   './index.html',
