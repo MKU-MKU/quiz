@@ -58,22 +58,66 @@ function isOk(sel,cor){
   return(!isNaN(s)&&!isNaN(c)&&s!==''&&c!=='')?Number(s)===Number(c):s.toLowerCase()===c.toLowerCase();
 }
 function normQ(raw,fid){
-  const a=Array.isArray(raw)?raw:(raw?.questions||raw?.data||[]);
+  // Step 1: unwrap envelope objects
+  let a = Array.isArray(raw) ? raw
+        : (raw?.questions || raw?.data || raw?.quiz || raw?.items || null);
+
+  // Step 2: handle numbered-key objects like {"1":{...},"2":{...}}
+  if(!Array.isArray(a) && a === null && raw && typeof raw === 'object'){
+    const vals = Object.values(raw);
+    // Only treat as question list if values look like question objects
+    if(vals.length && vals[0] && (vals[0].q || vals[0].question || vals[0].Question)){
+      a = vals;
+    }
+  }
+
   if(!Array.isArray(a)){
-    console.warn('[normQ] Unexpected data format for', fid, '— got:', typeof raw, raw);
+    console.warn('[normQ] Unrecognised format for', fid, '— got:', typeof raw,
+      Array.isArray(raw)?'array':JSON.stringify(raw).slice(0,120));
     return [];
   }
-  const valid = a.filter(q=>q&&(q.q||q.question)&&Array.isArray(q.options)&&q.options.length);
-  const skipped = a.length - valid.length;
-  if(skipped>0) console.warn(`[normQ] ${skipped}/${a.length} questions skipped (missing q/options) in ${fid}`);
-  return valid.map((q,i)=>({
-    q:q.q||q.question||'',
-    options:q.options||[],
-    correct:q.correct!==undefined?q.correct:q.answer,
-    explanation:q.explanation||q.explain||'',
-    fileId:fid||'local',
-    uid:`${fid||'local'}_${i}`
-  }));
+
+  const result = [];
+  let skipped = 0;
+  a.forEach((q,i)=>{
+    if(!q || typeof q !== 'object'){ skipped++; return; }
+
+    // Question text — try every known field name
+    const text = q.q || q.question || q.Question || q.stem || q.ques || q.text || '';
+    if(!text){ skipped++; return; }
+
+    // Options — try array first, then a/b/c/d lettered keys
+    let options = q.options || q.opts || q.choices || q.Options;
+    if(!Array.isArray(options)){
+      const lettered = [q.a||q.A, q.b||q.B, q.c||q.C, q.d||q.D, q.e||q.E]
+        .filter(x=>x!==undefined && x!==null && x!=='');
+      if(lettered.length >= 2) options = lettered;
+    }
+    if(!Array.isArray(options) || options.length < 2){ skipped++; return; }
+
+    // Correct answer — normalise letter ("b"->1) or keep numeric index
+    let correct = q.correct !== undefined ? q.correct
+                : q.answer  !== undefined ? q.answer
+                : q.ans     !== undefined ? q.ans
+                : q.Answer  !== undefined ? q.Answer : undefined;
+    // Convert letter answer to 0-based index
+    if(typeof correct === 'string' && /^[a-eA-E]$/.test(correct.trim())){
+      correct = 'abcde'.indexOf(correct.trim().toLowerCase());
+    }
+
+    result.push({
+      q: String(text).trim(),
+      options: options.map(String),
+      correct,
+      explanation: q.explanation||q.explain||q.exp||q.solution||q.hint||'',
+      fileId: fid||'local',
+      uid: `${fid||'local'}_${i}`
+    });
+  });
+
+  if(skipped>0) console.warn(`[normQ] ${skipped}/${a.length} questions skipped in ${fid} (missing text or options)`);
+  if(!result.length) console.warn('[normQ] Zero valid questions from', fid, '— raw sample:', JSON.stringify(a[0]).slice(0,200));
+  return result;
 }
 function toast(msg,dur=3200){
   const c=document.getElementById('toasts');
@@ -649,7 +693,14 @@ const QUIZ = {
     }
     try{
       const r = await netFetch(`${APPS}?${qs({action:'getFile', fileId})}`, {redirect:'follow'}, 25000);
-      const data = await r.json();
+      const text = await r.text();
+      // Guard against HTML error pages (Apps Script login redirect, quota exceeded, etc.)
+      if(text.trim().startsWith('<')){
+        throw new Error('Server returned an HTML page instead of JSON — the Apps Script may be down or requires re-authorisation.');
+      }
+      let data;
+      try{ data = JSON.parse(text); }
+      catch(pe){ throw new Error('Could not parse server response. The file may be corrupted or the server returned an unexpected format.'); }
       if(data && data.success===false) throw new Error(data.error||'Server error');
       _save(ck, data);
       return data;
