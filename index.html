@@ -790,11 +790,10 @@ input[type=file]:hover{border-color:var(--amb)}
 <script src="app.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
-   PATCH LAYER v2 — HAMRO AFNAI 2.0
+   PATCH LAYER v2.1 — HAMRO AFNAI 2.0 (timer leak fixed)
    Contracts with app.js (IDs must NOT change):
      fc-chip, fc-ctr, fc-ok, fc-bad, fc-skip, fc-pf, fc-tmr
      ex-chip, ex-ctr, ex-ans, ex-pf, ex-tmr
-     rg rr rs (result bars)
 ════════════════════════════════════════════════════════════ */
 (function(){
 'use strict';
@@ -861,17 +860,21 @@ QUIZ.exAnswer = function(qi,oi){
   const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<tot*18);
 };
 
-/* 9. Timer urgent */
+/* ── FIXED: timer urgency with a single interval stored on S.quiz ── */
 const _st = QUIZ._startTimer.bind(QUIZ);
 QUIZ._startTimer = function(){
   _st();
-  const w=setInterval(()=>{
-    if(!S.quiz?.active){clearInterval(w);return;}
-    if(S.quiz.mode==='exam'){ const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18); }
+  // Clear any previous urgency watcher
+  if(S.quiz._urgentWatcher) clearInterval(S.quiz._urgentWatcher);
+  S.quiz._urgentWatcher = setInterval(()=>{
+    if(!S.quiz?.active){ clearInterval(S.quiz._urgentWatcher); return; }
+    if(S.quiz.mode==='exam'){
+      const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18);
+    }
   },1000);
 };
 
-/* 10. Search engine */
+/* 9. Search engine */
 function _srchFill(){
   const q=S.quiz?.qs?.[S.quiz.idx]; if(!q)return;
   const opts=(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
@@ -895,7 +898,7 @@ window.SRCH={
   }
 };
 
-/* 11. Richer dashboard */
+/* 10. Richer dashboard */
 const _hr=HOME.render.bind(HOME);
 HOME.render=function(){
   _hr();
@@ -918,7 +921,7 @@ function _sessions(){
   }).join('');
 }
 
-/* 12. REV list */
+/* 11. REV list */
 const _origRev=REV.renderList.bind(REV);
 REV.renderList=function(kind){
   const arr=kind==='bk'?S.bk:kind==='fl'?S.fl:S.wr;
@@ -932,12 +935,12 @@ REV.renderList=function(kind){
   }).join('');
 };
 
-/* 13. Swipe right → sidebar */
+/* 12. Swipe right → sidebar */
 let _tx=0,_ty=0;
 document.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;},{passive:true});
 document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-_tx,dy=Math.abs(e.changedTouches[0].clientY-_ty);if(_tx<22&&dx>60&&dy<70)UI.sidebarToggle();},{passive:true});
 
-/* 14. Keyboard shortcuts */
+/* 13. Keyboard shortcuts */
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     UI.sidebarClose();
@@ -948,7 +951,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&S.quiz?.active&&S.quiz?.mode!=='exam'){e.preventDefault();SRCH.toggle();}
 });
 
-/* 15. PWA install */
+/* 14. PWA install */
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault(); window._dpi=e;
   const b=$('installBtn'); if(b){b.style.display='';b.title='Install App';}
@@ -963,7 +966,7 @@ PWA.install=function(){
   _origInstall();
 };
 
-/* 16. Bottom nav helpers */
+/* 15. Bottom nav helpers */
 window._bnav=function(id){
   document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
   const b=$('bn-'+id); if(b) b.classList.add('active');
@@ -988,5 +991,5 @@ window._bnavMore=function(){
 
 })();
 </script>
-</body>
+</body> 
 </html>
