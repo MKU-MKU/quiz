@@ -58,11 +58,17 @@ function isOk(sel,cor){
   return(!isNaN(s)&&!isNaN(c)&&s!==''&&c!=='')?Number(s)===Number(c):s.toLowerCase()===c.toLowerCase();
 }
 function normQ(raw,fid){
-  // Step 1: unwrap envelope objects
-  let a = Array.isArray(raw) ? raw
-        : (raw?.questions || raw?.data || raw?.quiz || raw?.items || null);
+  // Step 1: if it's a server error object, surface it clearly
+  if(raw && typeof raw === 'object' && !Array.isArray(raw) && raw.success === false){
+    console.warn('[normQ] Server error for', fid, '—', raw.error);
+    return [];
+  }
 
-  // Step 2: handle numbered-key objects like {"1":{...},"2":{...}}
+  // Step 2: unwrap envelope objects
+  let a = Array.isArray(raw) ? raw
+        : (raw?.questions || raw?.data || raw?.quiz || raw?.items || raw?.result || null);
+
+  // Step 3: handle numbered-key objects like {"1":{...},"2":{...}}
   if(!Array.isArray(a) && a === null && raw && typeof raw === 'object'){
     const vals = Object.values(raw);
     // Only treat as question list if values look like question objects
@@ -686,9 +692,20 @@ const REV = {
 const QUIZ = {
   async _fetch(fileId, cacheKey, attempt=1){
     const ck = LS.QC + cacheKey;
+
+    // Helper: validate cached data is not a stale error object
+    function _validCache(v){
+      if(!v) return false;
+      // Reject cached error responses (success:false objects)
+      if(v && typeof v === 'object' && !Array.isArray(v) && v.success === false) return false;
+      return true;
+    }
+
     if(!S.online){
       const cached = _load(ck, null);
-      if(cached) return cached;
+      if(_validCache(cached)) return cached;
+      // If cache holds a stale error object, give a clear message
+      if(cached && !_validCache(cached)) throw new Error('Cached data is invalid (a previous network error was stored). Go online to refresh it.');
       throw new Error('You are offline and this set is not cached yet. Go to the Offline Cache tab to download it while online.');
     }
     try{
@@ -701,12 +718,26 @@ const QUIZ = {
       let data;
       try{ data = JSON.parse(text); }
       catch(pe){ throw new Error('Could not parse server response. The file may be corrupted or the server returned an unexpected format.'); }
-      if(data && data.success===false) throw new Error(data.error||'Server error');
-      _save(ck, data);
+
+      // Unwrap {success:true, result:[...]} or {success:true, data:[...]} envelope if present
+      if(data && typeof data === 'object' && !Array.isArray(data) && data.success === true){
+        if(data.result !== undefined) data = data.result;
+        else if(data.data !== undefined) data = data.data;
+        else if(data.questions !== undefined) data = data.questions;
+      }
+
+      if(data && typeof data === 'object' && !Array.isArray(data) && data.success === false){
+        throw new Error(data.error || 'Server returned an error for this file.');
+      }
+
+      // Only cache valid (non-error) data
+      if(_validCache(data)){
+        _save(ck, data);
+      }
       return data;
     } catch(err){
       const cached = _load(ck, null);
-      if(cached){ toast('📦 Loaded from cache (network error)'); return cached; }
+      if(_validCache(cached)){ toast('📦 Loaded from cache (network error)'); return cached; }
       // Auto-retry once on timeout or network error
       if(attempt < 2 && (err.message.includes('timed out') || err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))){
         toast('⚠️ Slow connection — retrying…');
@@ -787,13 +818,21 @@ const QUIZ = {
     if(!refs.length){ toast('No content configured yet'); return; }
     toast('⏳ Building today\'s challenge…');
     (async()=>{
-      const seedDate = today();
       const picks = shuf(refs).slice(0, Math.min(10, refs.length));
       const all = [];
+      let failed = 0;
       for(const ref of picks){
-        try{ const raw = await QUIZ._fetch(ref.fid, ref.key); all.push(...normQ(raw, ref.fid)); }catch{}
+        try{
+          const raw = await QUIZ._fetch(ref.fid, ref.key);
+          const qs2 = normQ(raw, ref.fid);
+          all.push(...qs2);
+        }catch(e){
+          failed++;
+          console.warn('[daily] Failed to load', ref.key, e.message);
+        }
       }
       if(!all.length){ toast('❌ Could not load daily challenge — try caching data first'); return; }
+      if(failed>0) toast(`⚠️ ${failed} file(s) failed — challenge uses ${all.length} questions`);
       const qsArr = shuf(all).slice(0,30);
       QUIZ.startWith(qsArr, 'flashcard', '🌟 Daily Challenge');
       STREAK.markToday();
@@ -1346,6 +1385,21 @@ const CACHE = {
     Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>localStorage.removeItem(k));
     toast('🗑 Cache cleared');
     CACHE.render();
+  },
+  purgeStale(){
+    // Remove any cached entries that are error objects (success:false) — these block offline use
+    let purged = 0;
+    Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>{
+      try{
+        const v = JSON.parse(localStorage.getItem(k));
+        if(v && typeof v === 'object' && !Array.isArray(v) && v.success === false){
+          localStorage.removeItem(k);
+          purged++;
+        }
+      }catch{}
+    });
+    if(purged > 0){ toast(`🧹 Removed ${purged} stale error cache entry${purged>1?'s':''}`); CACHE.render(); }
+    else toast('✅ No stale cache entries found');
   }
 };
 
@@ -1398,6 +1452,13 @@ const APP = {
   init(){
     document.getElementById('sb-lv').value='';
     if(_load(LS.THEME,'dark')==='light') document.body.classList.add('light');
+    // Silently remove any stale error-object cache entries left from previous failed fetches
+    Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>{
+      try{
+        const v=JSON.parse(localStorage.getItem(k));
+        if(v && typeof v==='object' && !Array.isArray(v) && v.success===false) localStorage.removeItem(k);
+      }catch{}
+    });
     UI.go('home');
     CACHE.render();
     if('Notification' in window && Notification.permission==='granted') TT._scheduleChecks();

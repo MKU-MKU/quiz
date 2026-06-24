@@ -242,24 +242,44 @@ function getFileContents(p) {
   if (!fileId) return { success: false, error: "Missing fileId." };
   try {
     const file = DriveApp.getFileById(fileId);
-    // Verify file is accessible (shared correctly)
-    const sharing = file.getSharingAccess();
-    if (sharing === DriveApp.Access.PRIVATE) {
-      return { success: false, error: "File is private. Set sharing to 'Anyone with the link' in Google Drive." };
+
+    // Verify file is accessible (shared correctly) — wrapped in try/catch because
+    // getSharingAccess() can throw on domain-restricted files or unusual sharing states.
+    try {
+      const sharing = file.getSharingAccess();
+      if (sharing === DriveApp.Access.PRIVATE) {
+        return { success: false, error: "File is private. Set sharing to 'Anyone with the link' in Google Drive." };
+      }
+    } catch(sharingErr) {
+      // If we can't check sharing but the file was retrieved, proceed optimistically.
+      // The real read below will fail with a permission error if truly inaccessible.
+      Logger.log("getSharingAccess() threw: " + sharingErr.message + " — proceeding anyway.");
     }
+
     const text = file.getBlob().getDataAsString("UTF-8").trim();
     if (!text) return { success: false, error: "File is empty." };
+
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch (e) {
       return { success: false, error: "File does not contain valid JSON. Parse error: " + e.message };
     }
+
     // If the file itself contained a stringified JSON (double-encoded), unwrap it
     if (typeof parsed === "string") {
       try { parsed = JSON.parse(parsed); } catch(e) { /* leave as-is */ }
     }
-    return parsed;
+
+    // Validate the parsed result is usable (array or object with question arrays)
+    if (!parsed) {
+      return { success: false, error: "File parsed to an empty or null value." };
+    }
+
+    // Always return a consistent success wrapper so the client can detect errors reliably.
+    // The client (app.js) knows to unwrap {success:true, result:...}.
+    return { success: true, result: parsed };
+
   } catch (err) {
     // Provide a clearer error if it's a permissions issue
     const msg = err.message || "";
