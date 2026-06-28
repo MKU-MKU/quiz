@@ -379,7 +379,7 @@ button{font-family:var(--ff)}
 @keyframes tout{from{opacity:1}to{opacity:0;transform:translateY(-6px)}}
 
 /* Modal */
-.mbg{position:fixed;inset:0;z-index:11111;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:1rem}.mbg.show{display:flex}
+.mbg{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.72);backdrop-filter:blur(10px);display:none;align-items:center;justify-content:center;padding:1rem}.mbg.show{display:flex}
 .mbox{background:var(--c2);border:1px solid var(--b2);border-radius:var(--r4);width:100%;max-width:420px;max-height:88vh;overflow-y:auto;box-shadow:var(--sh3);animation:mfade .16s var(--spring)}
 @keyframes mfade{from{opacity:0;transform:scale(.93) translateY(8px)}to{opacity:1;transform:none}}
 .mhd{display:flex;align-items:center;justify-content:space-between;padding:.9rem 1rem .6rem;border-bottom:1px solid var(--b1)}.mhd h3{font-family:var(--fd);font-size:.88rem;font-weight:700}
@@ -407,6 +407,9 @@ input[type=file]:hover{border-color:var(--amb)}
 .on-card-banner span{font-size:1.1rem}
 
 @media(max-width:700px){.g2{grid-template-columns:1fr}.dash-lower{grid-template-columns:1fr}}
+#net-mode-btn{transition:all var(--ease)}
+#net-mode-btn.forced{animation:netpulse 2.5s ease-in-out infinite}
+@keyframes netpulse{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px rgba(244,63,94,.2)}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
@@ -457,6 +460,7 @@ input[type=file]:hover{border-color:var(--amb)}
     </div>
     <div class="tb-r">
       <div class="uchip" id="uchip">👤 —</div>
+      <button class="tb-btn" id="net-mode-btn" onclick="NET.toggle()" title="Online mode — click to force offline" style="font-size:.8rem;min-width:32px;justify-content:center;color:var(--grn);border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.08)">🟢</button>
       <button class="tb-btn" onclick="UI.theme()" title="Toggle theme">🌓</button>
       <button class="tb-btn" onclick="PWA.toggleFullscreen()" title="Fullscreen">⛶</button>
       <button class="tb-btn" id="installBtn" style="display:none" onclick="PWA.install()" title="Install App">📲</button>
@@ -559,6 +563,9 @@ input[type=file]:hover{border-color:var(--amb)}
       <div class="view" id="view-online">
         <div class="ph"><h2>☁️ Online Study</h2><p>Level → Chapter → Subtopic → Mode</p></div>
         <div class="on-card-banner"><span>📡</span> Questions stream from Google Drive and cache automatically for offline use.</div>
+        <div id="on-offline-warn" style="display:none;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);padding:.65rem .9rem;margin-bottom:.75rem;font-size:.74rem;color:var(--ros)">
+          📡 <strong>You're offline.</strong> Only cached question sets will load. <a onclick="UI.go('offline')" style="color:var(--amb);cursor:pointer;text-decoration:underline">Go to Offline Cache →</a>
+        </div>
         <div class="card">
           <div class="card-hd"><h3>Content Selector</h3><span class="ctag tc">Google Drive</span></div>
           <select class="sel-c" id="on-lv" onchange="ON.onLv()"><option value="">📖 Select Level…</option><option value="level5">Level 5 — Civil Engineering</option><option value="level7">Level 7 — Diploma</option><option value="gk">General Knowledge</option><option value="old_question">Old Questions / Sets</option></select>
@@ -627,7 +634,7 @@ input[type=file]:hover{border-color:var(--amb)}
       <div class="view" id="view-wrong">
         <div class="ph"><h2>❌ Wrong Bank</h2><p>Every question you got wrong — retry to master them</p></div>
         <div class="card"><div class="card-hd"><h3>Wrong Answers</h3>
-          <div class="bg"><button class="btn btn-sm btn-p" onclick="REV.start('wr','flashcard')">⚡ Retry All</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('wr')">🗑 Clear</button></div>
+          <div class="bg"><button class="btn btn-sm btn-p" onclick="REV.start('wr','flashcard')">⚡ Retry Flash</button><button class="btn btn-sm btn-a" onclick="REV.start('wr','exam')">📝 Retry Exam</button><button class="btn btn-sm btn-r" onclick="REV.clearAll('wr')">🗑 Clear</button></div>
         </div><div id="wr-list"></div></div>
       </div>
 
@@ -681,6 +688,7 @@ input[type=file]:hover{border-color:var(--amb)}
           <div class="bg" style="margin-top:.38rem">
             <button class="btn btn-a btn-lg" onclick="CACHE.dl()">⬇️ Cache All Data</button>
             <button class="btn btn-r" onclick="CACHE.clr()">🗑 Clear Cache</button>
+            <button class="btn btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="CACHE.purgeStale()">🧹 Fix Errors</button>
           </div>
         </div>
         <div class="card"><div class="card-hd"><h3>Per-Level Status</h3></div><div class="cg" id="cache-grid"></div></div>
@@ -790,10 +798,11 @@ input[type=file]:hover{border-color:var(--amb)}
 <script src="app.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
-   PATCH LAYER v2.1 — HAMRO AFNAI 2.0 (timer leak fixed)
+   PATCH LAYER v2 — HAMRO AFNAI 2.0
    Contracts with app.js (IDs must NOT change):
      fc-chip, fc-ctr, fc-ok, fc-bad, fc-skip, fc-pf, fc-tmr
      ex-chip, ex-ctr, ex-ans, ex-pf, ex-tmr
+     rg rr rs (result bars)
 ════════════════════════════════════════════════════════════ */
 (function(){
 'use strict';
@@ -801,15 +810,8 @@ const $   = id => document.getElementById(id);
 const set = (id,v) => { const e=$(id); if(e) e.textContent=v; };
 const htm = (id,v) => { const e=$(id); if(e) e.innerHTML=v; };
 
-/* 1. Strip emoji from stat tiles */
-function _num(el){ if(!el)return; const m=el.textContent.match(/\d+/); el.textContent=m?m[0]:'0'; }
-function _watchTiles(){
-  ['fc-ok','fc-bad','fc-skip','ex-ans'].forEach(id=>{
-    const el=$(id); if(!el||el._w)return; el._w=true;
-    new MutationObserver(()=>_num(el)).observe(el,{childList:true,characterData:true,subtree:true});
-    _num(el);
-  });
-}
+/* 1. Stat tiles now emit plain numbers from app.js — no stripping needed */
+function _watchTiles(){ /* no-op: app.js now emits plain numbers directly */ }
 
 /* 2. Clean emoji chip prefix */
 function _cleanChip(id){ const e=$(id); if(!e)return; e.textContent=e.textContent.replace(/^[⚡📝🌟❌⭐🚩🎯]\s*/,'').trim(); }
@@ -822,9 +824,7 @@ const _rf = QUIZ._renderFlashcard.bind(QUIZ);
 QUIZ._renderFlashcard = function(){
   _rf(); _watchTiles(); _cleanChip('fc-chip');
   if(S.quiz.qs) _ctr('fc-ctr', S.quiz.idx+1, S.quiz.qs.length);
-  const acts=$('fc-acts');
-  if(acts){ const a=acts.querySelector('a.ib'); if(a){ const b=document.createElement('button'); b.className='ib'; b.title='Search Q+options (Ctrl+F)'; b.textContent='🔍'; b.onclick=SRCH.toggle; a.replaceWith(b); } }
-  _srchFill();
+  _srchFill(); // app.js renders search as button directly now
 };
 
 /* 5. Patch _updateFcCounts */
@@ -860,21 +860,17 @@ QUIZ.exAnswer = function(qi,oi){
   const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<tot*18);
 };
 
-/* ── FIXED: timer urgency with a single interval stored on S.quiz ── */
+/* 9. Timer urgent */
 const _st = QUIZ._startTimer.bind(QUIZ);
 QUIZ._startTimer = function(){
   _st();
-  // Clear any previous urgency watcher
-  if(S.quiz._urgentWatcher) clearInterval(S.quiz._urgentWatcher);
-  S.quiz._urgentWatcher = setInterval(()=>{
-    if(!S.quiz?.active){ clearInterval(S.quiz._urgentWatcher); return; }
-    if(S.quiz.mode==='exam'){
-      const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18);
-    }
+  const w=setInterval(()=>{
+    if(!S.quiz?.active){clearInterval(w);return;}
+    if(S.quiz.mode==='exam'){ const t=$('ex-tmr'); if(t) t.classList.toggle('urgent',S.quiz.left<S.quiz.qs.length*18); }
   },1000);
 };
 
-/* 9. Search engine */
+/* 10. Search engine */
 function _srchFill(){
   const q=S.quiz?.qs?.[S.quiz.idx]; if(!q)return;
   const opts=(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+') '+o).join('  ');
@@ -898,49 +894,16 @@ window.SRCH={
   }
 };
 
-/* 10. Richer dashboard */
-const _hr=HOME.render.bind(HOME);
-HOME.render=function(){
-  _hr();
-  const h=new Date().getHours();
-  const G=[{t:'Burning midnight oil?',i:'🌙',r:[0,5]},{t:'Good morning!',i:'🌅',r:[5,12]},{t:'Good afternoon!',i:'☀️',r:[12,17]},{t:'Good evening!',i:'🌆',r:[17,21]},{t:'Working late?',i:'🌙',r:[21,24]}];
-  const g=G.find(x=>h>=x.r[0]&&h<x.r[1])||G[1];
-  set('greeting-title',g.t); set('greeting-icon',g.i);
-  _sessions();
-};
-function _sessions(){
-  const el=$('recent-sessions'); if(!el)return;
-  const ss=S.prog.sessions.slice(0,6);
-  if(!ss.length){el.innerHTML='<div class="empty"><div class="empty-i">📈</div><p>No sessions yet — start a quiz!</p></div>';return;}
-  const mIc=m=>m==='exam'?'📝':m==='flashcard'?'⚡':'📊';
-  el.innerHTML=ss.map(s=>{
-    const ic=(s.chapter||'').includes('Wrong')?'❌':(s.chapter||'').includes('Daily')?'🌟':(s.chapter||'').includes('Bookmarks')?'⭐':mIc(s.mode);
-    const cls=s.pct>=70?'tg':s.pct>=40?'ta':'tr';
-    const dt=new Date(s.at).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `<div class="sess-row"><span class="sess-ic">${ic}</span><div class="sess-info"><div class="sess-ch">${esc(s.chapter||'Study')}</div><div class="sess-ts">${dt}</div></div><span class="ctag ${cls}">${s.pct}%</span></div>`;
-  }).join('');
-}
+/* 11. Dashboard rendering now native in app.js HOME.render */
 
-/* 11. REV list */
-const _origRev=REV.renderList.bind(REV);
-REV.renderList=function(kind){
-  const arr=kind==='bk'?S.bk:kind==='fl'?S.fl:S.wr;
-  const elId=kind==='bk'?'bk-list':kind==='fl'?'fl-list':'wr-list';
-  const el=$(elId); if(!el){_origRev(kind);return;}
-  if(!arr||!arr.length){el.innerHTML=`<div class="empty"><div class="empty-i">${kind==='bk'?'⭐':kind==='fl'?'🚩':'❌'}</div><p>Nothing here yet</p></div>`;return;}
-  el.innerHTML=arr.map((q,i)=>{
-    const opts=(q.options||[]).map((o,j)=>{const c=String(j)===String(q.correct)||j===Number(q.correct);return `<div class="eo${c?' shc':''}">${String.fromCharCode(65+j)}) ${esc(o)}</div>`;}).join('');
-    const rb=kind!=='wr'?`<button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')">🗑</button>`:'';
-    return `<div class="qcard" style="margin-bottom:.5rem"><div class="qm"><span class="qn mono">#${i+1}</span>${rb}</div><div class="qt" style="font-size:.82rem">${esc(q.q)}</div><div style="margin-top:.3rem">${opts}</div>${q.explanation?`<div class="expl show" style="margin-top:.45rem">${esc(q.explanation)}</div>`:''}</div>`;
-  }).join('');
-};
+/* 12. REV list rendering now native in app.js REV.renderList */
 
-/* 12. Swipe right → sidebar */
+/* 13. Swipe right → sidebar */
 let _tx=0,_ty=0;
 document.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;_ty=e.touches[0].clientY;},{passive:true});
 document.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-_tx,dy=Math.abs(e.changedTouches[0].clientY-_ty);if(_tx<22&&dx>60&&dy<70)UI.sidebarToggle();},{passive:true});
 
-/* 13. Keyboard shortcuts */
+/* 14. Keyboard shortcuts */
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
     UI.sidebarClose();
@@ -951,7 +914,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='f'&&S.quiz?.active&&S.quiz?.mode!=='exam'){e.preventDefault();SRCH.toggle();}
 });
 
-/* 14. PWA install */
+/* 15. PWA install */
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault(); window._dpi=e;
   const b=$('installBtn'); if(b){b.style.display='';b.title='Install App';}
@@ -966,7 +929,7 @@ PWA.install=function(){
   _origInstall();
 };
 
-/* 15. Bottom nav helpers */
+/* 16. Bottom nav helpers */
 window._bnav=function(id){
   document.querySelectorAll('.bn-item').forEach(e=>e.classList.remove('active'));
   const b=$('bn-'+id); if(b) b.classList.add('active');
@@ -991,5 +954,5 @@ window._bnavMore=function(){
 
 })();
 </script>
-</body> 
+</body>
 </html>
