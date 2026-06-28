@@ -26,7 +26,8 @@ const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Satur
 const LS = {
   SES:'ha_ses', CRED:'ha_cred', THEME:'ha_theme',
   PROG:'ha_prog', BK:'ha_bk', FL:'ha_fl', WR:'ha_wr',
-  QC:'ha_qc_', TT:'ha_tt', STK:'ha_stk', ADMIN_SES:'ha_admin_ses'
+  QC:'ha_qc_', TT:'ha_tt', STK:'ha_stk', ADMIN_SES:'ha_admin_ses',
+  FORCED_OFFLINE:'ha_forced_off'
 };
 
 /* ═══════════════ 2. APP STATE ═══════════════ */
@@ -34,6 +35,7 @@ const S = {
   user: null,
   isAdmin: false,
   online: navigator.onLine,
+  forcedOffline: _load('ha_forced_off', false),
   bk: _load(LS.BK, []),
   fl: _load(LS.FL, []),
   wr: _load(LS.WR, []),
@@ -140,6 +142,7 @@ function openMod(title,html){
 function closeMod(){document.getElementById('mbg').classList.remove('show')}
 function qs(params){return Object.entries(params).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}
 async function netFetch(url, opts, timeoutMs=20000){
+  if(S.forcedOffline) throw new Error('OFFLINE');
   if(!S.online) throw new Error('OFFLINE');
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), timeoutMs);
@@ -273,7 +276,7 @@ const AUTH = {
     const s=_load(LS.SES,null);
     if(!s) return false;
     const expired = Date.now()-s.at > 86400000*APP_CONFIG.SESSION_DAYS;
-    if(expired && S.online) return false;
+    if(expired) return false;
     AUTH._enter(s.user, !S.online);
     return true;
   }
@@ -330,23 +333,49 @@ const ADMIN = {
       const r = await netFetch(`${APPS}?${qs({action:'adminListUsers', ...ADMIN.creds})}`, {redirect:'follow'});
       const res = await r.json();
       if(!res.success){ if(body) body.innerHTML = `<div class="l-err" style="display:block">${esc(res.error||'Failed to load users')}</div>`; return; }
-      const users = res.users || [];
-      const pending = users.filter(u=>u.status==='pending');
-      const active = users.filter(u=>u.status==='active');
-      const rejected = users.filter(u=>u.status==='rejected');
-      body.innerHTML = `
-        <div class="bg" style="margin-bottom:.8rem">
-          <span class="ctag ta">⏳ ${pending.length} pending</span>
-          <span class="ctag tg">✅ ${active.length} active</span>
-          <span class="ctag tr">🚫 ${rejected.length} rejected</span>
-        </div>
-        ${pending.length ? `<p style="font-weight:700;font-size:.78rem;margin-bottom:.4rem">Pending Approval</p>${pending.map(ADMIN._row).join('')}<hr>` : ''}
-        <p style="font-weight:700;font-size:.78rem;margin-bottom:.4rem">All Users</p>
-        ${users.length ? users.map(ADMIN._row).join('') : '<div class="empty"><div class="empty-i">👤</div><p>No users yet</p></div>'}
-      `;
+      ADMIN._allUsers = res.users || [];
+      ADMIN._renderUsers(ADMIN._allUsers);
     } catch {
       if(body) body.innerHTML = '<div class="l-err" style="display:block">Connection error loading users.</div>';
     }
+  },
+  _renderUsers(users){
+    const body = document.getElementById('admin-body');
+    if(!body) return;
+    const pending = users.filter(u=>u.status==='pending');
+    const active = users.filter(u=>u.status==='active');
+    const rejected = users.filter(u=>u.status==='rejected');
+    const existingSearch = document.getElementById('admin-search-val');
+    const searchVal = existingSearch ? existingSearch.value : '';
+    body.innerHTML = `
+      <div style="display:flex;gap:.4rem;margin-bottom:.7rem;align-items:center">
+        <input id="admin-search-val" type="text" placeholder="🔍 Search by name or username…" value="${esc(searchVal)}"
+          style="flex:1;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r1);padding:.4rem .65rem;color:var(--t1);font-size:.76rem;font-family:var(--ff);outline:none"
+          oninput="ADMIN._filterUsers(this.value)">
+        <button class="btn btn-sm btn-a" onclick="ADMIN.refresh()">↺</button>
+      </div>
+      <div class="bg" style="margin-bottom:.8rem">
+        <span class="ctag ta">⏳ ${pending.length} pending</span>
+        <span class="ctag tg">✅ ${active.length} active</span>
+        <span class="ctag tr">🚫 ${rejected.length} rejected</span>
+      </div>
+      ${pending.length ? `<p style="font-weight:700;font-size:.78rem;margin-bottom:.4rem">Pending Approval</p>${pending.map(ADMIN._row).join('')}<hr>` : ''}
+      <p style="font-weight:700;font-size:.78rem;margin-bottom:.4rem">All Users</p>
+      <div id="admin-user-list">${users.length ? users.map(ADMIN._row).join('') : '<div class="empty"><div class="empty-i">👤</div><p>No users yet</p></div>'}</div>
+    `;
+    if(searchVal){
+      const inp = document.getElementById('admin-search-val');
+      if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+    }
+  },
+  _filterUsers(q){
+    if(!ADMIN._allUsers) return;
+    const needle = q.toLowerCase().trim();
+    const filtered = needle
+      ? ADMIN._allUsers.filter(u=>(u.username||'').toLowerCase().includes(needle)||(u.name||'').toLowerCase().includes(needle))
+      : ADMIN._allUsers;
+    const el = document.getElementById('admin-user-list');
+    if(el) el.innerHTML = filtered.length ? filtered.map(ADMIN._row).join('') : '<div class="empty"><div class="empty-i">🔍</div><p>No users match</p></div>';
   },
   _row(u){
     const statusTag = u.status==='pending' ? '<span class="ctag ta">pending</span>' : u.status==='active' ? '<span class="ctag tg">active</span>' : '<span class="ctag tr">rejected</span>';
@@ -482,8 +511,9 @@ const SB = {
   go(mode){
     const ts=document.getElementById('sb-to');
     const fid=ts.value,key=ts.options[ts.selectedIndex]?.dataset?.key;
+    const name=ts.options[ts.selectedIndex]?.textContent||'Sidebar';
     if(!fid||!key){toast('Select a subtopic first');return}
-    QUIZ.load(fid,key,mode,'Sidebar');
+    QUIZ.load(fid,key,mode,name);
   }
 };
 
@@ -659,14 +689,20 @@ const REV = {
       el.innerHTML = `<div class="empty"><div class="empty-i">${kind==='bk'?'⭐':kind==='fl'?'🚩':'❌'}</div><p>Nothing here yet</p></div>`;
       return;
     }
-    el.innerHTML = arr.map((q,i)=>`
-      <div class="qcard" style="margin-bottom:.6rem">
+    el.innerHTML = arr.map((q,i)=>{
+      const opts=(q.options||[]).map((o,j)=>{
+        const c=String(j)===String(q.correct)||j===Number(q.correct);
+        return `<div class="eo${c?' shc':''}">${String.fromCharCode(65+j)}) ${esc(o)}</div>`;
+      }).join('');
+      return `<div class="qcard" style="margin-bottom:.5rem">
         <div class="qm"><span class="qn mono">#${i+1}</span>
-          <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid)}')">🗑</button>
+          <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')">🗑</button>
         </div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
-      </div>
-    `).join('');
+        <div style="margin-top:.3rem">${opts}</div>
+        ${q.explanation?`<div class="expl show" style="margin-top:.45rem">${esc(q.explanation)}</div>`:''}
+      </div>`;
+    }).join('');
   },
   _removeOne(kind, uid){
     const arr=REV._store(kind);
@@ -749,20 +785,62 @@ const QUIZ = {
   },
 
   async load(fileId, cacheKey, mode, chapterName){
-    QUIZ._showLoader('Loading questions…');
+    // Quick offline pre-check: warn if offline/forced-offline and not cached
+    if(!S.online || S.forcedOffline){
+      const ck = LS.QC + cacheKey;
+      const cached = _load(ck, null);
+      const isValid = cached && !(typeof cached === 'object' && !Array.isArray(cached) && cached.success === false);
+      if(!isValid){
+        QUIZ._showError('You are offline and this set is not cached yet. Go to the Offline Cache tab while online to download it.', null);
+        return;
+      }
+    }
+    QUIZ._showLoader('Connecting to server…');
+    const msgTimer = setTimeout(()=>{
+      QUIZ._showLoader('Still loading… (Apps Script may be warming up)');
+    }, 5000);
+    const msgTimer2 = setTimeout(()=>{
+      QUIZ._showLoader('Taking longer than usual… please wait or check your connection.');
+    }, 12000);
     try{
       const raw = await QUIZ._fetch(fileId, cacheKey);
+      clearTimeout(msgTimer); clearTimeout(msgTimer2);
       const qsArr = normQ(raw, fileId);
       QUIZ._hideLoader();
       if(!qsArr.length){ toast('❌ No valid questions found in this file. Check the file format.'); return; }
       QUIZ.startWith(qsArr, mode, chapterName);
     } catch(err){
+      clearTimeout(msgTimer); clearTimeout(msgTimer2);
       QUIZ._hideLoader();
       const msg = err.message==='OFFLINE'
         ? 'You are offline and this set is not cached. Download it first from the Offline Cache tab.'
         : err.message;
-      toast('❌ ' + msg, 5000);
+      // Show persistent error card with retry option
+      QUIZ._showError(msg, ()=>QUIZ.load(fileId, cacheKey, mode, chapterName));
     }
+  },
+
+  _showError(msg, retryFn){
+    let el = document.getElementById('quiz-error-card');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'quiz-error-card';
+      el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:9999;padding:1.5rem';
+      document.body.appendChild(el);
+    }
+    // Store retry callback on element so onclick can call it cleanly
+    el._retry = retryFn || null;
+    el.innerHTML = `<div style="background:var(--c2);border:1px solid var(--bad-bd);border-radius:var(--r3);padding:1.4rem 1.5rem;max-width:380px;width:100%;box-shadow:var(--sh3)">
+      <div style="font-size:1.4rem;margin-bottom:.5rem">❌</div>
+      <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--ros);margin-bottom:.6rem">Failed to Load</div>
+      <div style="font-size:.78rem;color:var(--t2);line-height:1.6;margin-bottom:1rem">${esc(msg)}</div>
+      <div style="display:flex;gap:.5rem">
+        <button id="quiz-err-retry" style="flex:1;padding:.58rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r1);color:#0F0A00;font-weight:700;font-size:.82rem;cursor:pointer;font-family:var(--ff)">🔄 Retry</button>
+        <button onclick="document.getElementById('quiz-error-card').remove()" style="padding:.58rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.82rem;cursor:pointer;font-family:var(--ff)">✕ Close</button>
+      </div>
+    </div>`;
+    el.style.display = 'flex';
+    document.getElementById('quiz-err-retry').onclick = ()=>{ el.remove(); if(el._retry) el._retry(); };
   },
 
   _showLoader(msg){
@@ -791,6 +869,8 @@ const QUIZ = {
   startWith(qsArr, mode, chapterName){
     if(!qsArr || !qsArr.length){ toast('No questions to study'); return; }
     QUIZ._stopTimer();
+    const modeLabel = mode==='exam' ? '📝 Exam' : '⚡ Flashcard';
+    toast(`${modeLabel} — ${qsArr.length} question${qsArr.length!==1?'s':''} · ${chapterName||'Study'}`, 2500);
     S.quiz = {
       qs: shuf(qsArr), ans: new Array(qsArr.length).fill(null),
       mode, idx:0, timer:null, elapsed:0,
@@ -875,23 +955,24 @@ const QUIZ = {
     document.getElementById('fc-q').textContent = q.q;
 
     const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
-    const gq = encodeURIComponent(q.q.slice(0,120));
     document.getElementById('fc-acts').innerHTML = `
-      <button class="ib ${isStarred?'starred':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
-      <button class="ib ${isFlagged?'flagged':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
-      <a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none">🔍</a>
+      <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
+      <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
+      <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)">🔍</button>
     `;
 
     const ansIdx = S.quiz.ans[S.quiz.idx];
     const answered = ansIdx !== null;
     const optsEl = document.getElementById('fc-opts');
     optsEl.innerHTML = q.options.map((opt,i)=>{
-      let cls='opt';
+      let cls='eo';
       if(answered){
-        cls += (i===Number(q.correct)||String(i)===String(q.correct)) ? ' shc' : (i===ansIdx ? ' bad2' : '');
-        if(i===ansIdx && isOk(ansIdx,q.correct)) cls = 'opt shc';
+        const isCorrect = isOk(i, q.correct);
+        const isSelected = i===ansIdx;
+        if(isCorrect) cls += ' shc';
+        else if(isSelected) cls += ' bad2';
       }
-      return `<div class="${cls} ${answered?'locked':''}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}">
+      return `<div class="${cls}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}" style="${answered?'cursor:default;pointer-events:none':''}">
         <div class="ok">${String.fromCharCode(65+i)}</div><div>${esc(opt)}</div>
       </div>`;
     }).join('');
@@ -912,9 +993,9 @@ const QUIZ = {
       if(a===null){ if(S.quiz.shown?.has(i)) skip++; return; }
       if(isOk(a, S.quiz.qs[i].correct)) ok++; else bad++;
     });
-    document.getElementById('fc-ok').textContent='✅ '+ok;
-    document.getElementById('fc-bad').textContent='❌ '+bad;
-    document.getElementById('fc-skip').textContent='⏭ '+skip;
+    document.getElementById('fc-ok').textContent=ok;
+    document.getElementById('fc-bad').textContent=bad;
+    document.getElementById('fc-skip').textContent=skip;
     // ── FIX: removed non-existent progress bar elements (rg, rr, rs) ──
   },
   fcAnswer(i){
@@ -948,6 +1029,7 @@ const QUIZ = {
   fcFinish(){
     QUIZ._stopTimer();
     S.quiz.active=false;
+    STREAK.markToday();
     QUIZ._showResults();
   },
 
@@ -978,7 +1060,7 @@ const QUIZ = {
     document.getElementById(`eqc-${qi}`).classList.add('answered');
     const answered = S.quiz.ans.filter(a=>a!==null).length;
     document.getElementById('ex-ctr').textContent = `${answered}/${S.quiz.qs.length}`;
-    document.getElementById('ex-ans').textContent = '✓ '+answered;
+    document.getElementById('ex-ans').textContent = answered;
     document.getElementById('ex-pf').style.width = `${(answered/S.quiz.qs.length)*100}%`;
   },
   submitExam(){
@@ -987,6 +1069,7 @@ const QUIZ = {
     if(unanswered>0 && S.quiz.left>0 && !confirm(`${unanswered} question(s) unanswered. Submit anyway?`))return;
     QUIZ._stopTimer();
     S.quiz.active=false;
+    STREAK.markToday();
     S.quiz.qs.forEach((q,qi)=>{
       document.querySelectorAll(`#eqc-${qi} .eo`).forEach((e,oi2)=>{
         e.style.pointerEvents='none';
@@ -1040,10 +1123,10 @@ const QUIZ = {
         <div class="qm"><span class="qn mono">Q${i+1}</span><span class="ctag ${correctPick?'tg':'tr'}">${correctPick?'Correct':a===null?'Skipped':'Wrong'}</span></div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
         ${q.options.map((opt,oi)=>{
-          let cls='opt';
+          let cls='eo';
           if(isOk(oi,q.correct)) cls+=' shc';
           else if(oi===a) cls+=' bad2';
-          return `<div class="${cls}"><div class="ok">${String.fromCharCode(65+oi)}</div><div>${esc(opt)}</div></div>`;
+          return `<div class="${cls}" style="cursor:default;pointer-events:none"><div class="ok">${String.fromCharCode(65+oi)}</div><div>${esc(opt)}</div></div>`;
         }).join('')}
         ${q.explanation?`<div class="expl show">${esc(q.explanation)}</div>`:''}
       </div>`;
@@ -1153,8 +1236,17 @@ const STREAK = {
 const HOME = {
   render(){
     const h=new Date().getHours();
-    const greet = h<5?'Burning the midnight oil? 🌙':h<12?'Good morning ☀️':h<17?'Good afternoon 🌤️':h<21?'Good evening 🌆':'Working late? 🌙';
-    document.getElementById('greeting').textContent = `${greet} — ${S.user?.name||S.user?.username||'Student'}, let's get studying.`;
+    const G=[
+      {t:'Burning midnight oil?',i:'🌙',r:[0,5]},
+      {t:'Good morning!',i:'🌅',r:[5,12]},
+      {t:'Good afternoon!',i:'☀️',r:[12,17]},
+      {t:'Good evening!',i:'🌆',r:[17,21]},
+      {t:'Working late?',i:'🌙',r:[21,24]}
+    ];
+    const g=G.find(x=>h>=x.r[0]&&h<x.r[1])||G[1];
+    const gt=document.getElementById('greeting-title'); if(gt) gt.textContent=g.t;
+    const gi=document.getElementById('greeting-icon'); if(gi) gi.textContent=g.i;
+    document.getElementById('greeting').textContent = `${S.user?.name||S.user?.username||'Student'} — Nepal Engineering & PSC exam prep.`;
     HOME.updateStats();
     HOME.updateBadges();
     STREAK.renderBar();
@@ -1174,14 +1266,15 @@ const HOME = {
   renderRecent(){
     const el = document.getElementById('recent-sessions');
     if(!el)return;
-    const sessions = S.prog.sessions.slice(0,5);
+    const sessions = S.prog.sessions.slice(0,6);
     if(!sessions.length){ el.innerHTML='<div class="empty"><div class="empty-i">📈</div><p>No sessions yet — start a quiz!</p></div>'; return; }
-    el.innerHTML = sessions.map(s=>`
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--bd);font-size:.78rem">
-        <div><div style="font-weight:700">${esc(s.chapter)}</div><div style="color:var(--t3);font-size:.68rem">${new Date(s.at).toLocaleString()}</div></div>
-        <span class="ctag ${s.pct>=70?'tg':s.pct>=40?'ta':'tr'}">${s.pct}%</span>
-      </div>
-    `).join('');
+    const mIc=m=>m==='exam'?'📝':m==='flashcard'?'⚡':'📊';
+    el.innerHTML = sessions.map(s=>{
+      const ic=(s.chapter||'').includes('Wrong')?'❌':(s.chapter||'').includes('Daily')?'🌟':(s.chapter||'').includes('Bookmarks')?'⭐':mIc(s.mode);
+      const cls=s.pct>=70?'tg':s.pct>=40?'ta':'tr';
+      const dt=new Date(s.at).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div class="sess-row"><span class="sess-ic">${ic}</span><div class="sess-info"><div class="sess-ch">${esc(s.chapter||'Study')}</div><div class="sess-ts">${dt}</div></div><span class="ctag ${cls}">${s.pct}%</span></div>`;
+    }).join('');
   },
   _clockTimer:null,
   tickClock(){
@@ -1240,14 +1333,14 @@ const TT = {
     `).join('') : '<div class="empty"><div class="empty-i">📅</div><p>Nothing scheduled today</p></div>';
 
     const weekEl = document.getElementById('tt-week');
-    const today = new Date().getDay();
+    const todayIdx = new Date().getDay();
     weekEl.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:.5rem">
         ${DAYS.map((d,i)=>`
           <div style="text-align:center;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
-            color:${i===today?'var(--neon)':'var(--t3)'};
+            color:${i===todayIdx?'var(--neon)':'var(--t3)'};
             padding:.3rem .2rem;
-            border-bottom:2px solid ${i===today?'var(--neon)':'var(--bd)'}">
+            border-bottom:2px solid ${i===todayIdx?'var(--neon)':'var(--bd)'}">
             ${d.slice(0,3)}
           </div>
         `).join('')}
@@ -1255,7 +1348,7 @@ const TT = {
       <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;align-items:start">
         ${DAYS.map((d,di)=>{
           const sess = S.tt.sessions.filter(s=>s.day===di).sort((a,b)=>a.start.localeCompare(b.start));
-          const isToday = di===today;
+          const isToday = di===todayIdx;
           return `<div style="min-height:60px;background:${isToday?'rgba(0,229,255,.04)':'var(--bg1)'};border-radius:var(--r1);border:1px solid ${isToday?'rgba(0,229,255,.18)':'var(--bd)'};padding:.3rem .25rem">
             ${sess.length ? sess.map(s=>`
               <div style="background:${isToday?'rgba(0,229,255,.1)':'var(--surf2)'};border:1px solid ${isToday?'rgba(0,229,255,.25)':'var(--bd)'};border-radius:6px;padding:.28rem .35rem;margin-bottom:3px;cursor:default"
@@ -1331,7 +1424,7 @@ const TT = {
           new Notification('📚 Study session starting', {body:starting.name});
         }
       }
-    },20000);
+    },60000);
   }
 };
 
@@ -1339,8 +1432,14 @@ const TT = {
 const CACHE = {
   render(){
     const refs = ChapterData.allFileRefs();
+    function _isCached(key){
+      const v = _load(LS.QC+key, null);
+      if(!v) return false;
+      if(typeof v === 'object' && !Array.isArray(v) && v.success === false) return false;
+      return true;
+    }
     let cachedCount=0;
-    refs.forEach(r=>{ if(_load(LS.QC+r.key,null)) cachedCount++; });
+    refs.forEach(r=>{ if(_isCached(r.key)) cachedCount++; });
     const tag=document.getElementById('cache-tag');
     tag.textContent = cachedCount===refs.length && refs.length ? 'Fully cached' : cachedCount>0 ? 'Partially cached' : 'Not cached';
     tag.className = 'ctag ' + (cachedCount===refs.length && refs.length ? 'tg' : cachedCount>0 ? 'ta' : 'tr');
@@ -1350,7 +1449,7 @@ const CACHE = {
     const levels = ChapterData.levels();
     grid.innerHTML = levels.map(lv=>{
       const lvRefs = refs.filter(r=>r.lv===lv);
-      const lvCached = lvRefs.filter(r=>_load(LS.QC+r.key,null)).length;
+      const lvCached = lvRefs.filter(r=>_isCached(r.key)).length;
       return `<div class="ci"><div class="ci-n">${esc(ChapterData.levelLabel(lv))}</div>
         <div class="ci-s"><div class="cd ${lvCached===lvRefs.length&&lvRefs.length?'y':'n'}"></div>${lvCached}/${lvRefs.length} cached</div></div>`;
     }).join('');
@@ -1461,20 +1560,81 @@ const APP = {
     });
     UI.go('home');
     CACHE.render();
+    _updateNetBtn();
+    _updateOfflineWarn();
     if('Notification' in window && Notification.permission==='granted') TT._scheduleChecks();
   }
 };
 
 /* ── network status wiring ── */
+function _updateOfflineWarn(){
+  const el = document.getElementById('on-offline-warn');
+  if(el) el.style.display = (S.online && !S.forcedOffline) ? 'none' : 'flex';
+}
+function _updateNetBtn(){
+  const btn = document.getElementById('net-mode-btn');
+  if(!btn) return;
+  const effectivelyOnline = S.online && !S.forcedOffline;
+  btn.textContent = effectivelyOnline ? '🟢' : '🔴';
+  btn.title = effectivelyOnline
+    ? 'Online mode — click to force offline'
+    : S.forcedOffline
+      ? 'Forced offline mode — click to go online'
+      : 'Network offline — no connection';
+  btn.style.color = effectivelyOnline ? 'var(--grn)' : 'var(--ros)';
+  btn.style.borderColor = effectivelyOnline ? 'rgba(34,197,94,.35)' : 'var(--bad-bd)';
+  btn.style.background = effectivelyOnline ? 'rgba(34,197,94,.08)' : 'var(--bad-bg)';
+  btn.classList.toggle('forced', S.forcedOffline);
+  // update offbar
+  const offbar = document.getElementById('offbar');
+  if(offbar){
+    if(!S.online){
+      offbar.textContent = '📡 Network offline — serving from local cache';
+      offbar.classList.add('show');
+    } else if(S.forcedOffline){
+      offbar.textContent = '🔴 Offline mode forced — network blocked by you';
+      offbar.classList.add('show');
+    } else {
+      offbar.classList.remove('show');
+    }
+  }
+}
+
+/* ═══════════════ NET — manual online/offline toggle ═══════════════ */
+const NET = {
+  toggle(){
+    if(!S.online && !S.forcedOffline){
+      // Actually offline — can't go online, just inform
+      toast('📡 No network connection — connect to the internet first');
+      return;
+    }
+    S.forcedOffline = !S.forcedOffline;
+    _save(LS.FORCED_OFFLINE, S.forcedOffline);
+    if(S.forcedOffline){
+      toast('🔴 Offline mode on — all network requests blocked');
+    } else {
+      toast('🟢 Online mode restored — network requests allowed');
+    }
+    _updateNetBtn();
+    _updateOfflineWarn();
+  }
+};
 window.addEventListener('online', ()=>{
   S.online=true;
-  document.getElementById('offbar')?.classList.remove('show');
-  toast('🌐 Back online');
+  _updateNetBtn();
+  _updateOfflineWarn();
+  if(!S.forcedOffline) toast('🌐 Back online');
+  else toast('🌐 Network restored — still in forced offline mode');
 });
 window.addEventListener('offline', ()=>{
+  const wasForcedOff = S.forcedOffline;
   S.online=false;
-  document.getElementById('offbar')?.classList.add('show');
-  toast('📡 You are offline — cached data will be used');
+  // If network dropped while in online mode, auto-switch and warn
+  if(!wasForcedOff){
+    toast('📡 Network lost — switched to offline mode automatically');
+  }
+  _updateNetBtn();
+  _updateOfflineWarn();
 });
 
 /* ── login screen connectivity indicator ── */
@@ -1503,6 +1663,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 /* ═══════════════ EXPLICIT GLOBAL EXPOSURE ═══════════════ */
 window.AUTH = AUTH;
 window.ADMIN = ADMIN;
+window.NET = NET;
 window.UI = UI;
 window.SB = SB;
 window.ON = ON;
@@ -1513,6 +1674,8 @@ window.QUIZ = QUIZ;
 window.PWA = PWA;
 window.PROG = PROG;
 window.HOME = HOME;
+window.STREAK = STREAK;
 window.TT = TT;
 window.CACHE = CACHE;
 window.DATA = DATA;
+window.APP = APP;
