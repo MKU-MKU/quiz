@@ -446,7 +446,7 @@ const PWA = {
 /* ═══════════════ 7. UI ═══════════════ */
 const UI = {
   cur: 'home',
-  go(v){
+  _goRaw(v){
     document.getElementById('quiz-wrap').style.display='none';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
     const el=document.getElementById('view-'+v);
@@ -465,6 +465,13 @@ const UI = {
       timetable:()=>TT.render(),
       psycho:()=>PSY.init()
     })[v]?.();
+  },
+  go(v){
+    if(S.quiz.active && document.getElementById('quiz-wrap').style.display !== 'none'){
+      QUIZ._exitGuard(()=>UI._goRaw(v));
+      return;
+    }
+    UI._goRaw(v);
   },
   sidebarToggle(){
     document.getElementById('sb').classList.toggle('open');
@@ -541,11 +548,31 @@ const ON = {
       toast('ℹ️ This chapter has no question files yet');
       return;
     }
+    const isOfflineMode = !S.online || S.forcedOffline;
+    let anyEnabled = false;
     Object.entries(files).forEach(([n,id])=>{
       if(!id)return;
-      const o=document.createElement('option');o.value=id;o.dataset.key=`${lv}_${ch}_${n}`;o.textContent=n;ts.appendChild(o);
+      const cacheKey = `${lv}_${ch}_${n}`;
+      const cached = _load(LS.QC+cacheKey, null);
+      const isCached = cached && !(typeof cached==='object' && !Array.isArray(cached) && cached.success===false);
+      const o=document.createElement('option');
+      o.value=id;
+      o.dataset.key=cacheKey;
+      if(isOfflineMode && !isCached){
+        o.textContent = `🔒 ${n} (not cached)`;
+        o.disabled = true;
+        o.style.color = 'var(--t3)';
+      } else {
+        o.textContent = isCached ? `📦 ${n}` : n;
+        anyEnabled = true;
+      }
+      ts.appendChild(o);
     });
     ts.disabled=false;
+    if(isOfflineMode && !anyEnabled){
+      ts.innerHTML='<option>No cached files for this chapter</option>';
+      toast('📡 You\'re offline — no cached files in this chapter. Cache them first while online.');
+    }
   },
   start(mode){
     const ts=document.getElementById('on-to');
@@ -869,6 +896,47 @@ const QUIZ = {
   startWith(qsArr, mode, chapterName){
     if(!qsArr || !qsArr.length){ toast('No questions to study'); return; }
     QUIZ._stopTimer();
+    // Show question limit picker if set is large enough
+    if(qsArr.length > 20){
+      QUIZ._showLimitPicker(qsArr, mode, chapterName);
+      return;
+    }
+    QUIZ._doStart(qsArr, mode, chapterName);
+  },
+
+  _showLimitPicker(qsArr, mode, chapterName){
+    if(document.getElementById('quiz-limit-modal')) return;
+    const total = qsArr.length;
+    const presets = [10,20,30,50].filter(n=>n<total);
+    const modal = document.createElement('div');
+    modal.id = 'quiz-limit-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
+    modal.innerHTML = `
+      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
+        <div style="font-size:1.2rem;margin-bottom:.35rem">${mode==='exam'?'📝':'⚡'}</div>
+        <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">${esc(chapterName||'Quiz')}</div>
+        <div style="font-size:.74rem;color:var(--t3);margin-bottom:1rem">${total} questions available — how many do you want to do?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.75rem">
+          ${presets.map(n=>`<button onclick="document.getElementById('qlm-inp').value=${n}" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">${n}</button>`).join('')}
+          <button onclick="document.getElementById('qlm-inp').value=${total}" style="padding:.35rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r1);color:var(--t2);font-size:.76rem;cursor:pointer;font-family:var(--ff)">All ${total}</button>
+        </div>
+        <input id="qlm-inp" type="number" min="1" max="${total}" value="${Math.min(20,total)}"
+          style="width:100%;background:var(--c1);border:1.5px solid var(--b1);border-radius:var(--r2);padding:.5rem .75rem;color:var(--t1);font-size:.9rem;font-family:var(--ff);outline:none;box-sizing:border-box;margin-bottom:.75rem">
+        <div style="display:flex;gap:.4rem">
+          <button id="qlm-start" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">Start →</button>
+          <button onclick="document.getElementById('quiz-limit-modal').remove()" style="padding:.62rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.83rem;cursor:pointer;font-family:var(--ff)">✕</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+    document.getElementById('qlm-start').onclick = ()=>{
+      const n = Math.min(total, Math.max(1, parseInt(document.getElementById('qlm-inp').value)||total));
+      modal.remove();
+      QUIZ._doStart(shuf(qsArr).slice(0,n), mode, chapterName);
+    };
+  },
+
+  _doStart(qsArr, mode, chapterName){
     const modeLabel = mode==='exam' ? '📝 Exam' : '⚡ Flashcard';
     toast(`${modeLabel} — ${qsArr.length} question${qsArr.length!==1?'s':''} · ${chapterName||'Study'}`, 2500);
     S.quiz = {
@@ -936,11 +1004,42 @@ const QUIZ = {
   _stopTimer(){ if(S.quiz.timer){ clearInterval(S.quiz.timer); S.quiz.timer=null; } },
 
   quit(){
-    if(!confirm('Quit this session? Progress on this attempt will be lost.'))return;
-    QUIZ._stopTimer();
-    S.quiz.active=false;
-    document.getElementById('quiz-wrap').style.display='none';
-    UI.go('home');
+    QUIZ._exitGuard(()=>{ UI._goRaw('home'); });
+  },
+
+  _exitGuard(afterQuit){
+    if(document.getElementById('quiz-exit-modal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'quiz-exit-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
+    const isExam = S.quiz.mode === 'exam';
+    const answered = S.quiz.ans.filter(a=>a!==null).length;
+    const total = S.quiz.qs.length;
+    modal.innerHTML = `
+      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
+        <div style="font-size:1.3rem;margin-bottom:.4rem">⚠️</div>
+        <div style="font-family:var(--fd);font-size:.95rem;font-weight:700;color:var(--t1);margin-bottom:.3rem">Leave this quiz?</div>
+        <div style="font-size:.76rem;color:var(--t3);margin-bottom:1.1rem">${isExam ? answered+' of '+total+' answered' : 'Question '+(S.quiz.idx+1)+' of '+total} · ${S.quiz.ch}</div>
+        <div style="display:flex;flex-direction:column;gap:.45rem">
+          ${isExam ? '<button id="qem-finish" style="padding:.62rem;background:var(--ok-bg);border:1px solid var(--ok-bd);border-radius:var(--r2);color:var(--grn);font-weight:700;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left">✅ Submit & See Results — grade what I have answered so far</button>' : ''}
+          <button id="qem-quit" style="padding:.62rem;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);color:var(--ros);font-weight:700;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left">🚪 Quit — discard this session</button>
+          <button id="qem-cancel" style="padding:.62rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-weight:600;font-size:.83rem;cursor:pointer;font-family:var(--ff);text-align:left">↩ Cancel — keep studying</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = ()=> modal.remove();
+    if(isExam){
+      document.getElementById('qem-finish').onclick = ()=>{ close(); QUIZ.submitExam(); };
+    }
+    document.getElementById('qem-quit').onclick = ()=>{
+      close();
+      QUIZ._stopTimer();
+      S.quiz.active = false;
+      document.getElementById('quiz-wrap').style.display = 'none';
+      if(afterQuit) afterQuit();
+    };
+    document.getElementById('qem-cancel').onclick = close;
+    modal.addEventListener('click', e=>{ if(e.target===modal) close(); });
   },
 
   /* ── FLASHCARD MODE ── */
@@ -1141,7 +1240,7 @@ const QUIZ = {
 document.addEventListener('keydown', e=>{
   if(!S.quiz.active) return;
   if(document.getElementById('quiz-wrap').style.display==='none') return;
-  if(e.key==='Escape'){ QUIZ.quit(); }
+  if(e.key==='Escape'){ if(S.quiz.active) QUIZ.quit(); }
   if(S.quiz.mode!=='exam'){
     if(e.key==='ArrowRight') QUIZ.fcNav(1);
     if(e.key==='ArrowLeft') QUIZ.fcNav(-1);
@@ -1178,18 +1277,42 @@ const PROG = {
     const byChap = {};
     S.prog.sessions.forEach(s=>{
       const k=s.chapter||'Unknown';
-      if(!byChap[k]) byChap[k]={correct:0,total:0};
-      byChap[k].correct+=s.correct; byChap[k].total+=s.total;
+      if(!byChap[k]) byChap[k]={correct:0,total:0,sessions:0,lastAt:0};
+      byChap[k].correct+=s.correct||0;
+      byChap[k].total+=s.total||0;
+      byChap[k].sessions++;
+      if((s.at||0)>byChap[k].lastAt) byChap[k].lastAt=s.at||0;
     });
     const chapEl = document.getElementById('chap-acc');
-    const entries = Object.entries(byChap);
+    const entries = Object.entries(byChap).sort((a,b)=>b[1].lastAt-a[1].lastAt);
     if(!entries.length){
       chapEl.innerHTML = '<div class="empty"><div class="empty-i">📊</div><p>Complete a quiz to see chapter breakdowns</p></div>';
     } else {
-      chapEl.innerHTML = entries.map(([name,d])=>{
+      // Weak topic detection: chapters with accuracy < 60% and at least 5 questions
+      const weak = entries.filter(([,d])=> d.total>=5 && d.total ? Math.round((d.correct/d.total)*100)<60 : false);
+      const weakHtml = weak.length ? `
+        <div style="background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);padding:.75rem 1rem;margin-bottom:.8rem">
+          <div style="font-size:.72rem;font-weight:800;color:var(--ros);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.4rem">⚠️ Weak Topics — needs attention</div>
+          ${weak.map(([name,d])=>{
+            const p=d.total?Math.round((d.correct/d.total)*100):0;
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:.2rem 0;font-size:.76rem"><span style="color:var(--t2)">${esc(name)}</span><span class="ctag tr">${p}%</span></div>`;
+          }).join('')}
+          <div style="margin-top:.5rem;font-size:.7rem;color:var(--t3)">Tip: Use ❌ Wrong Bank to drill these topics</div>
+        </div>` : '';
+      chapEl.innerHTML = weakHtml + entries.map(([name,d])=>{
         const p = d.total ? Math.round((d.correct/d.total)*100) : 0;
-        return `<div class="pb-w"><div class="pb-l"><span>${esc(name)}</span><span class="mono">${p}%</span></div>
-          <div class="pb"><div class="pb-f" style="width:${p}%"></div></div></div>`;
+        const cls = p>=70?'ok':p>=50?'amb':'bad';
+        const barColor = p>=70?'var(--grn)':p>=50?'var(--amb)':'var(--ros)';
+        return `<div class="pb-w">
+          <div class="pb-l">
+            <span style="font-size:.78rem">${esc(name)}</span>
+            <div style="display:flex;align-items:center;gap:.35rem">
+              <span style="font-size:.68rem;color:var(--t3)">${d.sessions} session${d.sessions!==1?'s':''} · ${d.correct}/${d.total}</span>
+              <span class="ctag t${cls==='ok'?'g':cls==='amb'?'a':'r'}" style="font-size:.65rem">${p}%</span>
+            </div>
+          </div>
+          <div class="pb"><div class="pb-f" style="width:${p}%;background:${barColor}"></div></div>
+        </div>`;
       }).join('');
     }
   }
