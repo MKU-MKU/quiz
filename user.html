@@ -117,6 +117,8 @@ button{font-family:var(--ff)}
 .sel-c option{background:var(--c1)}
 
 #main{flex:1;overflow-y:auto;padding:1.1rem 1.1rem 1.8rem}
+#main.quiz-active{overflow-y:visible}
+@media(max-width:960px){#main.quiz-active{overflow-y:auto}}
 @media(max-width:960px){#main{padding:.85rem .75rem calc(var(--bn-h) + var(--safe-b) + .75rem)}}
 
 .view{display:none}
@@ -405,6 +407,7 @@ input[type=file]:hover{border-color:var(--amb)}
 <link rel="dns-prefetch" href="https://fonts.gstatic.com">
 <link rel="dns-prefetch" href="https://script.google.com">
 <link rel="dns-prefetch" href="https://drive.google.com">
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -907,6 +910,38 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.tb-r').insertBefore(adm, document.querySelector('.tb-r').firstChild);
   }
 });
+
+/* ── QUIZ VISIBILITY FIX ── */
+/* Ensure quiz wrapper displays fully when active */
+const _origQuizShow = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'style');
+/* Patch QUIZ._doStart to add proper classes */
+const _quizDoStart = QUIZ._doStart;
+QUIZ._doStart = function(qsArr, mode, chapterName, doShuffle) {
+  const main = document.getElementById('main');
+  if(main) main.classList.add('quiz-active');
+  const qw = document.getElementById('quiz-wrap');
+  if(qw) qw.classList.add('on');
+  return _quizDoStart.call(this, qsArr, mode, chapterName, doShuffle);
+};
+/* Patch quiz quit/finish to remove classes */
+const _quizQuit = QUIZ.quit;
+QUIZ.quit = function() {
+  QUIZ._exitGuard(()=>{
+    const main = document.getElementById('main');
+    if(main) main.classList.remove('quiz-active');
+    const qw = document.getElementById('quiz-wrap');
+    if(qw) qw.classList.remove('on');
+    UI._goRaw('home');
+  });
+};
+const _quizShowResults = QUIZ._showResults;
+QUIZ._showResults = function() {
+  const main = document.getElementById('main');
+  if(main) main.classList.remove('quiz-active');
+  const qw = document.getElementById('quiz-wrap');
+  if(qw) qw.classList.remove('on');
+  return _quizShowResults.call(this);
+};
 </script>
 </body>
 </html>
