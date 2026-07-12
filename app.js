@@ -22,15 +22,15 @@
 /* ═══════════════ 1. CONFIG & CONSTANTS ═══════════════ */
 const APP_CONFIG = {
   // ⚠️ Must be the SAME deployed Apps Script URL as GAS_URL in index.html
-  // and admin.html (the trial+payment backend). All three files currently
-  // have the "YOUR_SCRIPT_ID" placeholder — replace it in all three at once.
+  // and admin.html (the trial+payment backend). If you redeploy the script
+  // and get a new /exec URL, update it in all three places at once.
   APPS_URL: "https://script.google.com/macros/s/AKfycbwAhfyQm7NvxaNjgRm3oC9SdKwrfKNfjgDd-J0nYjYAhsU1d2PP2JfyMI30ol9AGSatyg/exec",
 };
 const APPS = APP_CONFIG.APPS_URL;
 
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 // Optional labels for organizing Bookmarks — assign one per bookmarked question.
-const BK_TAGS = ['Formulae','Need Revision','Conflicting','Interesting','Need Correction'];
+const BK_TAGS = ['Need Check','Interesting','Debating','Confusing','Formulae'];
 const LS = {
   // ⚠️ Must be the EXACT SAME key as index.html's localStorage.setItem('hau_session', ...).
   // index.html is the only place that writes this key. Do not rename either side alone.
@@ -548,12 +548,14 @@ const REV = {
   },
   has(kind, uid){ return REV._store(kind).some(x=>x.uid===uid); },
   getTag(uid){ return S.bk.find(x=>x.uid===uid)?.tag || ''; },
-  setTag(uid, tag){
-    const item = S.bk.find(x=>x.uid===uid);
+  setTag(uid, tag, questionObj){
+    let item = S.bk.find(x=>x.uid===uid);
+    if(!item && questionObj){ item = {...questionObj, tag: ''}; S.bk.push(item); }
     if(!item) return;
     item.tag = tag;
     _save(LS.BK, S.bk);
     REV.renderList('bk');
+    HOME.updateBadges?.();
   },
 
   addWrong(question){
@@ -819,16 +821,27 @@ const QUIZ = {
     };
     document.getElementById('quiz-wrap').style.display='';
     document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
-    if(mode==='exam'){
-      document.getElementById('fc-wrap').style.display='none';
-      document.getElementById('ex-wrap').style.display='';
-      document.getElementById('res-wrap').style.display='none';
-      QUIZ._renderExam();
-    } else {
-      document.getElementById('ex-wrap').style.display='none';
-      document.getElementById('fc-wrap').style.display='';
-      document.getElementById('res-wrap').style.display='none';
-      QUIZ._renderFlashcard();
+    window.scrollTo(0,0); // previous view may have been scrolled down — reset so the quiz card isn't pushed below the fold
+    try{
+      if(mode==='exam'){
+        document.getElementById('fc-wrap').style.display='none';
+        document.getElementById('ex-wrap').style.display='';
+        document.getElementById('res-wrap').style.display='none';
+        QUIZ._renderExam();
+      } else {
+        document.getElementById('ex-wrap').style.display='none';
+        document.getElementById('fc-wrap').style.display='';
+        document.getElementById('res-wrap').style.display='none';
+        QUIZ._renderFlashcard();
+      }
+    } catch(err){
+      // Never leave a phantom "active" quiz that's blank on screen but still
+      // blocks navigation with the exit-guard — undo the start cleanly.
+      console.error('[QUIZ._doStart] render failed:', err);
+      S.quiz.active = false;
+      document.getElementById('quiz-wrap').style.display = 'none';
+      toast('❌ Could not display this quiz — one of the questions may be malformed. Try a different set.', 5000);
+      return;
     }
     QUIZ._startTimer();
   },
@@ -918,48 +931,55 @@ const QUIZ = {
   _renderFlashcard(){
     const q = S.quiz.qs[S.quiz.idx];
     if(!q)return;
-    document.getElementById('fc-chip').textContent = '⚡ ' + S.quiz.ch;
-    document.getElementById('fc-ctr').textContent = `${S.quiz.idx+1}/${S.quiz.qs.length}`;
-    document.getElementById('fc-pf').style.width = `${((S.quiz.idx)/S.quiz.qs.length)*100}%`;
-    document.getElementById('fc-qn').textContent = 'Q'+(S.quiz.idx+1);
-    document.getElementById('fc-q').textContent = q.q;
+    try{
+      document.getElementById('fc-chip').textContent = '⚡ ' + S.quiz.ch;
+      document.getElementById('fc-ctr').textContent = `${S.quiz.idx+1}/${S.quiz.qs.length}`;
+      document.getElementById('fc-pf').style.width = `${((S.quiz.idx)/S.quiz.qs.length)*100}%`;
+      document.getElementById('fc-qn').textContent = 'Q'+(S.quiz.idx+1);
+      document.getElementById('fc-q').textContent = q.q;
 
-    const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
-    document.getElementById('fc-acts').innerHTML = `
-      <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
-      <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
-      <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)">🔍</button>
-      ${isStarred ? `<select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="REV.setTag('${esc(q.uid||'')}', this.value)">
-        <option value="">🏷 Tag…</option>
-        ${BK_TAGS.map(t=>`<option value="${t}" ${REV.getTag(q.uid)===t?'selected':''}>${t}</option>`).join('')}
-      </select>` : ''}
-    `;
+      const isStarred = REV.has('bk', q.uid), isFlagged = REV.has('fl', q.uid);
+      document.getElementById('fc-acts').innerHTML = `
+        <button class="ib ${isStarred?'bk-on':''}" onclick="QUIZ._star()" title="Bookmark">⭐</button>
+        <button class="ib ${isFlagged?'fl-on':''}" onclick="QUIZ._flag()" title="Flag">🚩</button>
+        <button class="ib" onclick="SRCH.toggle()" title="Search (Ctrl+F)">🔍</button>
+        <select class="sel-c" style="font-size:.68rem;padding:.2rem .35rem;width:auto" onchange="QUIZ._tagCurrent(this.value)">
+          <option value="">🏷 Tag…</option>
+          ${BK_TAGS.map(t=>`<option value="${t}" ${REV.getTag(q.uid)===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      `;
 
-    const ansIdx = S.quiz.ans[S.quiz.idx];
-    const answered = ansIdx !== null;
-    const optsEl = document.getElementById('fc-opts');
-    optsEl.innerHTML = q.options.map((opt,i)=>{
-      let cls='eo';
-      if(answered){
-        const isCorrect = isOk(i, q.correct);
-        const isSelected = i===ansIdx;
-        if(isCorrect) cls += ' shc';
-        else if(isSelected) cls += ' bad2';
-      }
-      return `<div class="${cls}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}" style="${answered?'cursor:default;pointer-events:none':''}">
-        <div class="ok">${String.fromCharCode(65+i)}</div><div>${esc(opt)}</div>
-      </div>`;
-    }).join('');
+      const ansIdx = S.quiz.ans[S.quiz.idx];
+      const answered = ansIdx !== null;
+      const optsEl = document.getElementById('fc-opts');
+      optsEl.innerHTML = q.options.map((opt,i)=>{
+        let cls='eo';
+        if(answered){
+          const isCorrect = isOk(i, q.correct);
+          const isSelected = i===ansIdx;
+          if(isCorrect) cls += ' shc';
+          else if(isSelected) cls += ' bad2';
+        }
+        return `<div class="${cls}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}" style="${answered?'cursor:default;pointer-events:none':''}">
+          <div class="ok">${String.fromCharCode(65+i)}</div><div>${esc(opt)}</div>
+        </div>`;
+      }).join('');
 
-    const expl = document.getElementById('fc-expl');
-    if(answered && q.explanation){ expl.textContent = q.explanation; expl.classList.add('show'); }
-    else { expl.classList.remove('show'); expl.textContent=''; }
+      const expl = document.getElementById('fc-expl');
+      if(answered && q.explanation){ expl.textContent = q.explanation; expl.classList.add('show'); }
+      else { expl.classList.remove('show'); expl.textContent=''; }
 
-    document.getElementById('fc-hint').textContent = answered ? 'Use Next →' : 'Tap an option to answer';
-    document.getElementById('fc-prev').disabled = S.quiz.idx===0;
-    document.getElementById('fc-next').textContent = S.quiz.idx===S.quiz.qs.length-1 ? 'Finish ✔' : 'Next →';
+      document.getElementById('fc-hint').textContent = answered ? 'Use Next →' : 'Tap an option to answer';
+      document.getElementById('fc-prev').disabled = S.quiz.idx===0;
+      document.getElementById('fc-next').textContent = S.quiz.idx===S.quiz.qs.length-1 ? 'Finish ✔' : 'Next →';
 
-    QUIZ._updateFcCounts();
+      QUIZ._updateFcCounts();
+    } catch(err){
+      console.error('[QUIZ._renderFlashcard] question at idx', S.quiz.idx, 'failed to render:', err, q);
+      toast('⚠️ Skipped a malformed question', 2000);
+      if(S.quiz.idx < S.quiz.qs.length-1){ S.quiz.idx++; QUIZ._renderFlashcard(); }
+      else QUIZ.fcFinish();
+    }
   },
   _updateFcCounts(){
     let ok=0,bad=0,skip=0;
@@ -997,6 +1017,12 @@ const QUIZ = {
   _flag(){
     const q=S.quiz.qs[S.quiz.idx];
     REV.toggle('fl', q);
+    QUIZ._renderFlashcard();
+  },
+  _tagCurrent(tag){
+    const q=S.quiz.qs[S.quiz.idx];
+    if(!q) return;
+    REV.setTag(q.uid, tag, q);
     QUIZ._renderFlashcard();
   },
   fcFinish(){
@@ -1144,7 +1170,53 @@ const PROG = {
     _save(LS.PROG, S.prog);
     HOME.render();
   },
+  // Weighted average of recent session scores — recent sessions and
+  // exam-mode sessions (closer to real exam conditions) count more than
+  // old flashcard sessions. Needs at least 3 sessions to say anything
+  // useful; confidence grows with sample size and shrinks with volatility.
+  predict(){
+    const sessions = S.prog.sessions.filter(s=>s.total>0).slice(0,20); // newest first
+    if(sessions.length < 3) return null;
+    let wSum=0, vSum=0;
+    sessions.forEach((s,i)=>{
+      const recencyW = 1 - (i/sessions.length)*0.5;   // 1.0 → 0.5 as sessions age
+      const modeW = s.mode==='exam' ? 1.5 : 1.0;        // exam-mode counts more
+      const w = recencyW * modeW;
+      vSum += (s.pct||0) * w;
+      wSum += w;
+    });
+    const predicted = Math.round(vSum/wSum);
+    const pcts = sessions.map(s=>s.pct||0);
+    const mean = pcts.reduce((a,b)=>a+b,0)/pcts.length;
+    const variance = pcts.reduce((a,b)=>a+(b-mean)**2,0)/pcts.length;
+    const stdDev = Math.round(Math.sqrt(variance));
+    const confidence = sessions.length>=10 && stdDev<15 ? 'High' : sessions.length>=5 ? 'Medium' : 'Low';
+    return { predicted, margin: Math.max(3,stdDev), confidence, sampleSize: sessions.length };
+  },
+  renderPredict(){
+    const el = document.getElementById('predict-card');
+    if(!el) return;
+    const p = PROG.predict();
+    if(!p){
+      el.innerHTML = `<div class="card"><div class="card-hd"><h3>🎯 Predicted Exam Score</h3></div>
+        <div class="empty"><div class="empty-i">🎯</div><p>Complete at least 3 quizzes (exam mode helps most) to unlock a prediction</p></div></div>`;
+      return;
+    }
+    const cls = p.predicted>=70?'ok':p.predicted>=50?'amb':'bad';
+    const barColor = p.predicted>=70?'var(--grn)':p.predicted>=50?'var(--amb)':'var(--ros)';
+    const confColor = p.confidence==='High'?'tg':p.confidence==='Medium'?'ta':'tr';
+    el.innerHTML = `<div class="card">
+      <div class="card-hd"><h3>🎯 Predicted Exam Score</h3><span class="ctag ${confColor}">${p.confidence} confidence</span></div>
+      <div style="display:flex;align-items:baseline;gap:.5rem;margin:.3rem 0 .5rem">
+        <span style="font-size:2rem;font-weight:800;color:var(--t1);font-family:var(--fd)">${p.predicted}%</span>
+        <span style="font-size:.76rem;color:var(--t3)">± ${p.margin}% · based on your last ${p.sampleSize} session${p.sampleSize!==1?'s':''}</span>
+      </div>
+      <div class="pb"><div class="pb-f" style="width:${p.predicted}%;background:${barColor}"></div></div>
+      <div style="font-size:.7rem;color:var(--t3);margin-top:.55rem">Recent and exam-mode sessions count more. Not a guarantee — use it to gauge where you stand.</div>
+    </div>`;
+  },
   render(){
+    PROG.renderPredict();
     const total=S.prog.total, correct=S.prog.correct, wrong=total-correct;
     const pct = total ? Math.round((correct/total)*100) : 0;
     document.getElementById('prog-stats').innerHTML = `
