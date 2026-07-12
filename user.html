@@ -592,6 +592,7 @@ input[type=file]:hover{border-color:var(--amb)}
       <div class="view" id="view-progress">
         <div class="ph"><h2>📊 Progress</h2><p>Overall performance &amp; chapter breakdown</p></div>
         <div class="g4" id="prog-stats" style="margin-bottom:.85rem"></div>
+        <div id="predict-card" style="margin-bottom:.85rem"></div>
         <div class="card"><div class="card-hd"><h3>Chapter Accuracy</h3><span class="ctag tp">Breakdown</span></div><div id="chap-acc"></div></div>
         <div class="card"><div class="card-hd"><h3>Data Management</h3><span class="ctag tr">Backup</span></div>
           <div class="bg">
@@ -642,9 +643,7 @@ input[type=file]:hover{border-color:var(--amb)}
             <div class="qm">
               <span class="qn mono" id="fc-qn">#1</span>
               <div class="fc-acts" id="fc-acts">
-                <button class="ib" title="Bookmark" onclick="QUIZ.bk()">⭐</button>
-                <button class="ib" title="Flag" onclick="QUIZ.fl()">🚩</button>
-                <button class="ib" title="Search (Ctrl+F)" onclick="SRCH.toggle()">🔍</button>
+                <!-- Populated by QUIZ._renderFlashcard() on every question load -->
               </div>
             </div>
             <div class="qt" id="fc-q">Loading question…</div>
