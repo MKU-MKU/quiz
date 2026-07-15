@@ -7,12 +7,21 @@
 
 /* ── ADMIN CREDENTIALS ───────────────────────────────────────── */
 const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "ChangeMe123!";   // ⚠️ CHANGE THIS IMMEDIATELY
+const ADMIN_PASSWORD_DEFAULT = "ChangeMe123!";   // ⚠️ CHANGE THIS IMMEDIATELY (via admin.html's Change Password, or edit here before first deploy)
+
+// The admin password can be changed at runtime (see adminChangePassword),
+// so it can't live in a plain `const` — this reads the current value from
+// PropertiesService, falling back to the default above until it's changed.
+function getAdminPassword_() {
+  const stored = PropertiesService.getScriptProperties().getProperty("ADMIN_PASSWORD");
+  return stored || ADMIN_PASSWORD_DEFAULT;
+}
 
 /* ── SHEET CONFIG ── */
 const USERS_SHEET     = "Users";
 const PAYMENTS_SHEET  = "Payments";
 const SETTINGS_SHEET  = "Settings";
+const LOGS_SHEET      = "Logs";
 
 const USER_HEADERS = [
   "username", "passHash", "name", "email", "mobile",
@@ -27,6 +36,7 @@ const PAYMENT_HEADERS = [
 ];
 
 const SETTINGS_HEADERS = ["key", "value"];
+const LOG_HEADERS = ["timestamp", "admin", "action", "target", "details"];
 
 const TRIAL_HOURS = 24;
 
@@ -53,6 +63,9 @@ function doGet(e) {
 
   try {
     switch (action) {
+      // ── HEALTH CHECK ──
+      case "ping":                result = { success: true, pong: true }; break;
+
       // ── AUTH ──
       case "login":              result = handleLogin(e.parameter); break;
       case "signup":             result = handleSignup(e.parameter); break;
@@ -62,22 +75,27 @@ function doGet(e) {
       case "submitpayment":      result = submitPayment(e.parameter); break;
       case "getpaymentstatus":   result = getPaymentStatus(e.parameter); break;
       case "getsettings":        result = getSettings(); break;
+      case "getfile":            result = handleGetFile(e.parameter); break;
 
       // ── ADMIN WORLD ──
       case "adminlogin":         result = adminLogin(e.parameter); break;
+      case "adminchangepassword": result = adminChangePassword(e.parameter); break;
       case "adminlistusers":     result = adminListUsers(e.parameter); break;
       case "adminlistpayments":  result = adminListPayments(e.parameter); break;
       case "adminreviewpayment": result = adminReviewPayment(e.parameter); break;
       case "admingrantaccess":   result = adminGrantAccess(e.parameter); break;
+      case "adminupdateuser":    result = adminUpdateUser(e.parameter); break;
       case "admindeleteuser":    result = adminDeleteUser(e.parameter); break;
       case "admindeletepayment": result = adminDeletePayment(e.parameter); break;
       case "adminupdatesettings":result = adminUpdateSettings(e.parameter); break;
+      case "adminupdatesettingsbatch": result = adminUpdateSettingsBatch(e.parameter); break;
       case "adminstats":         result = adminStats(e.parameter); break;
+      case "adminlistlogs":      result = adminListLogs(e.parameter); break;
 
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: login, signup, checkSession, submitPayment, getPaymentStatus, getSettings, adminLogin, adminListUsers, adminListPayments, adminReviewPayment, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminStats"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListUsers, adminListPayments, adminReviewPayment, adminGrantAccess, adminUpdateUser, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
         };
     }
   } catch (err) {
@@ -153,6 +171,9 @@ function getUsersSheet_() {
       .setFontWeight("bold")
       .setBackground("#4285f4")
       .setFontColor("white");
+    // Mobile is column 5 (USER_HEADERS index 4) — force plain text so a
+    // digit-only value like "9812345678" is never auto-typed as a Number.
+    sheet.getRange(2, 5, sheet.getMaxRows() - 1, 1).setNumberFormat("@");
   }
   return sheet;
 }
@@ -185,6 +206,54 @@ function getSettingsSheet_() {
       .setFontColor("white");
   }
   return sheet;
+}
+
+function getLogsSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(LOGS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(LOGS_SHEET);
+    sheet.appendRow(LOG_HEADERS);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, LOG_HEADERS.length)
+      .setFontWeight("bold")
+      .setBackground("#9c27b0")
+      .setFontColor("white");
+  }
+  return sheet;
+}
+
+// Records one row per admin action. admin.html's "Activity Logs" tab
+// (LOGS module) has always called action=adminListLogs to read this, but
+// nothing ever wrote to it and the action didn't exist on the backend —
+// so the tab was permanently empty. Called from every admin mutation
+// below. Kept best-effort: a logging failure should never break the
+// action itself.
+function logAction_(admin, action, target, details) {
+  try {
+    getLogsSheet_().appendRow([new Date().toISOString(), admin || ADMIN_USERNAME, action || "", target || "", details || ""]);
+  } catch (err) {
+    console.error("logAction_ failed:", err);
+  }
+}
+
+// Returns logs newest-first; admin.html paginates/filters client-side.
+function adminListLogs(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const sheet = getLogsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const logs = [];
+  for (let i = 1; i < data.length; i++) {
+    logs.push({
+      timestamp: data[i][0],
+      admin: data[i][1],
+      action: data[i][2],
+      target: data[i][3],
+      details: data[i][4]
+    });
+  }
+  logs.reverse();
+  return { success: true, logs };
 }
 
 function initDefaultSettings_() {
@@ -237,7 +306,7 @@ function rowToUser_(row) {
     username: row[0] || "",
     name: row[2] || "",
     email: row[3] || "",
-    mobile: row[4] || "",
+    mobile: String(row[4] || ""),
     contact: row[5] || "",
     contactType: row[6] || "",
     status: row[7] || "trial",
@@ -256,7 +325,24 @@ function rowToUser_(row) {
 }
 
 function checkAdmin_(p) {
-  return p.adminUser === ADMIN_USERNAME && p.adminPass === ADMIN_PASSWORD;
+  if (p.adminUser === ADMIN_USERNAME && p.adminPass === getAdminPassword_()) return true;
+  if (!p.adminToken) return false;
+  const props = PropertiesService.getScriptProperties();
+  const storedToken = props.getProperty("ADMIN_TOKEN");
+  const expiresAt = Number(props.getProperty("ADMIN_TOKEN_EXPIRES") || 0);
+  if (!storedToken || p.adminToken !== storedToken) return false;
+  if (Date.now() > expiresAt) return false;
+  return true;
+}
+
+// Persists the token adminLogin() just issued so checkAdmin_() can validate
+// it on every later request. 24h lifetime matches admin.html's own
+// client-side `expires: Date.now() + 86400000` used for the localStorage
+// session — keep both in sync if either changes.
+function issueAdminToken_(token) {
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty("ADMIN_TOKEN", token);
+  props.setProperty("ADMIN_TOKEN_EXPIRES", String(Date.now() + 24 * 60 * 60 * 1000));
 }
 
 // A "yearly" grant is stored as permanentAccess=true + accessType="yearly"
@@ -287,7 +373,7 @@ function getOrCreateFolder_(folderName) {
    ═══════════════════════════════════════════════════════════════ */
 
 function handleLogin(p) {
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   const password = p.password || "";
 
   if (!username || !password) {
@@ -295,11 +381,11 @@ function handleLogin(p) {
   }
 
   // ── ADMIN WORLD ──
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+  if (username === ADMIN_USERNAME && password === getAdminPassword_()) {
     return {
       success: true,
       isAdmin: true,
-      adminToken: hashPass_(ADMIN_USERNAME + ADMIN_PASSWORD + new Date().getTime()),
+      adminToken: hashPass_(ADMIN_USERNAME + getAdminPassword_() + new Date().getTime()),
       user: { username: ADMIN_USERNAME, name: "Administrator", role: "admin" },
       message: "Welcome to Admin World"
     };
@@ -380,11 +466,11 @@ function handleLogin(p) {
 }
 
 function handleSignup(p) {
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   const password = p.password || "";
-  const name = (p.name || "").trim();
-  const email = (p.email || "").trim();
-  const mobile = (p.mobile || "").trim();
+  const name = String(p.name || "").trim();
+  const email = String(p.email || "").trim();
+  const mobile = String(p.mobile || "").trim();
   const contact = email || mobile;
   const contactType = email ? "email" : (mobile ? "phone" : "other");
 
@@ -432,7 +518,7 @@ function handleSignup(p) {
 }
 
 function checkSession(p) {
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   if (!username) return { success: false, error: "Username required." };
 
   const sheet = getUsersSheet_();
@@ -483,12 +569,12 @@ function checkSession(p) {
    ═══════════════════════════════════════════════════════════════ */
 
 function submitPayment(p) {
-  const username = (p.username || "").trim();
-  const name = (p.name || "").trim();
-  const email = (p.email || "").trim();
-  const mobile = (p.mobile || "").trim();
-  const txId = (p.txId || "").trim();
-  const remarks = (p.remarks || "").trim();
+  const username = String(p.username || "").trim();
+  const name = String(p.name || "").trim();
+  const email = String(p.email || "").trim();
+  const mobile = String(p.mobile || "").trim();
+  const txId = String(p.txId || "").trim();
+  const remarks = String(p.remarks || "").trim();
   const screenshotData = p.screenshot || "";
 
   if (!username) return { success: false, error: "Username required." };
@@ -557,7 +643,7 @@ function submitPayment(p) {
 }
 
 function getPaymentStatus(p) {
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   if (!username) return { success: false, error: "Username required." };
 
   const sheet = getPaymentsSheet_();
@@ -571,7 +657,7 @@ function getPaymentStatus(p) {
           username: data[i][0],
           name: data[i][1],
           email: data[i][2],
-          mobile: data[i][3],
+          mobile: String(data[i][3] || ""),
           txId: data[i][4],
           remarks: data[i][5],
           status: data[i][6],
@@ -596,23 +682,84 @@ function getSettings() {
   return { success: true, settings };
 }
 
+// ── QUESTION-FILE PROXY ──
+// app.js (QUIZ._fetch / CACHE.dl / CACHE.autoSync) downloads every question
+// set through this single action instead of hitting Google Drive directly,
+// because a plain https://drive.google.com/... link returns an HTML preview
+// page in fetch(), not raw JSON. Reading the file server-side with DriveApp
+// (running "as Me") sidesteps that entirely, and works even if the file's
+// sharing is left at "Anyone with the link" or tighter, as long as the
+// script owner's account can see it.
+function handleGetFile(p) {
+  const fileId = String(p.fileId || "").trim();
+  if (!fileId) {
+    return { success: false, error: "Missing fileId parameter." };
+  }
+  let file;
+  try {
+    file = DriveApp.getFileById(fileId);
+  } catch (err) {
+    return {
+      success: false,
+      error: "Could not open Drive file '" + fileId + "'. Check the fileId in chapters-data.js and make sure the file hasn't been deleted or moved. (" + (err.message || err) + ")"
+    };
+  }
+  let text;
+  try {
+    text = file.getBlob().getDataAsString("UTF-8");
+  } catch (err) {
+    return { success: false, error: "Could not read file contents: " + (err.message || err) };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    return {
+      success: false,
+      error: "File '" + file.getName() + "' is not valid JSON (" + (err.message || err) + "). Re-check the uploaded question file."
+    };
+  }
+  return { success: true, result: parsed };
+}
+
 /* ═══════════════════════════════════════════════════════════════
    ADMIN API — The Admin World
    ═══════════════════════════════════════════════════════════════ */
 
 function adminLogin(p) {
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   const password = p.password || "";
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+  if (username === ADMIN_USERNAME && password === getAdminPassword_()) {
+    const token = hashPass_(ADMIN_USERNAME + getAdminPassword_() + new Date().getTime());
+    issueAdminToken_(token);
+    logAction_(ADMIN_USERNAME, "Admin Login", "", "");
     return {
       success: true,
       isAdmin: true,
-      adminToken: hashPass_(ADMIN_USERNAME + ADMIN_PASSWORD + new Date().getTime()),
+      adminToken: token,
       user: { username: username, name: "Administrator", role: "admin" },
       message: "Welcome to Admin World"
     };
   }
   return { success: false, error: "Invalid admin credentials." };
+}
+
+// admin.html calls this then forces re-login (the old adminToken stays
+// valid until it naturally expires — 24h — since it's independent of the
+// password; that's an acceptable tradeoff for a single-admin panel).
+function adminChangePassword(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const currentPassword = p.currentPassword || "";
+  const newPassword = p.newPassword || "";
+  if (currentPassword !== getAdminPassword_()) {
+    return { success: false, error: "Current password is incorrect." };
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, error: "New password must be at least 6 characters." };
+  }
+  PropertiesService.getScriptProperties().setProperty("ADMIN_PASSWORD", newPassword);
+  logAction_(ADMIN_USERNAME, "Change Admin Password", "", "");
+  return { success: true, message: "Password changed." };
 }
 
 function adminListUsers(p) {
@@ -636,7 +783,7 @@ function adminListPayments(p) {
       username: data[i][0],
       name: data[i][1],
       email: data[i][2],
-      mobile: data[i][3],
+      mobile: String(data[i][3] || ""),
       txId: data[i][4],
       remarks: data[i][5],
       status: data[i][6],
@@ -652,9 +799,9 @@ function adminListPayments(p) {
 function adminReviewPayment(p) {
   if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
 
-  const username = (p.username || "").trim();
-  const status = (p.status || "").trim();
-  const rejectionReason = (p.rejectionReason || "").trim();
+  const username = String(p.username || "").trim();
+  const status = String(p.status || "").trim();
+  const rejectionReason = String(p.rejectionReason || "").trim();
 
   if (!username || !status) return { success: false, error: "Username and status required." };
   if (!["verified", "rejected", "pending"].includes(status)) {
@@ -698,18 +845,19 @@ function adminReviewPayment(p) {
     }
   }
 
+  logAction_(ADMIN_USERNAME, "Review Payment", username, "Status: " + status + (rejectionReason ? " (" + rejectionReason + ")" : ""));
   return { success: true, username, status };
 }
 
-// Lets admin.html grant access directly, either "permanent" (never expires)
+// duration is either "permanent" (never expires)
 // or "year" (expires exactly 365 days from now, then the person is routed
 // back to the payment/renewal screen automatically on their next login or
 // session check — see checkYearlyExpiry_()).
 function adminGrantAccess(p) {
   if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
 
-  const username = (p.username || "").trim();
-  const duration = (p.duration || "").trim(); // "permanent" | "year"
+  const username = String(p.username || "").trim();
+  const duration = String(p.duration || "").trim(); // "permanent" | "year"
   if (!username) return { success: false, error: "Username required." };
   if (!["permanent", "year"].includes(duration)) {
     return { success: false, error: "Duration must be 'permanent' or 'year'." };
@@ -733,27 +881,61 @@ function adminGrantAccess(p) {
   sheet.getRange(found.rowIndex, 15).setValue(duration === "year" ? "yearly" : "permanent"); // accessType
   sheet.getRange(found.rowIndex, 16).setValue(expiresAtIso);      // accessExpiresAt
 
+  logAction_(ADMIN_USERNAME, "Grant Access", username, "Duration: " + duration);
   return { success: true, username, duration, accessExpiresAt: expiresAtIso };
+}
+
+// Column indices below follow USER_HEADERS: name=3, email=4, mobile=5,
+// status=8, permanentAccess=14 (1-indexed sheet columns).
+function adminUpdateUser(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const username = String(p.username || "").trim();
+  if (!username) return { success: false, error: "Username required." };
+
+  const sheet = getUsersSheet_();
+  const found = findUserRow_(sheet, username);
+  if (!found) return { success: false, error: "User not found." };
+
+  const changes = [];
+  if (p.name !== undefined) { sheet.getRange(found.rowIndex, 3).setValue(p.name); changes.push("name"); }
+  if (p.email !== undefined) { sheet.getRange(found.rowIndex, 4).setValue(p.email); changes.push("email"); }
+  if (p.mobile !== undefined) { sheet.getRange(found.rowIndex, 5).setValue(p.mobile); changes.push("mobile"); }
+  if (p.status !== undefined && p.status !== "") { sheet.getRange(found.rowIndex, 8).setValue(p.status); changes.push("status→" + p.status); }
+  if (p.permanentAccess !== undefined) {
+    const val = (p.permanentAccess === true || p.permanentAccess === "true") ? "true" : "false";
+    sheet.getRange(found.rowIndex, 14).setValue(val);
+    changes.push("permanentAccess→" + val);
+  }
+  if (p.password) {
+    if (String(p.password).length < 6) return { success: false, error: "Password must be at least 6 characters." };
+    sheet.getRange(found.rowIndex, 2).setValue(hashPass_(p.password));
+    changes.push("password reset");
+  }
+
+  logAction_(ADMIN_USERNAME, "Update User", username, changes.join(", "));
+  return { success: true, username };
 }
 
 function adminDeleteUser(p) {
   if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   const sheet = getUsersSheet_();
   const found = findUserRow_(sheet, username);
   if (!found) return { success: false, error: "User not found." };
   sheet.deleteRow(found.rowIndex);
+  logAction_(ADMIN_USERNAME, "Delete User", username, "");
   return { success: true, deleted: username };
 }
 
 function adminDeletePayment(p) {
   if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
-  const username = (p.username || "").trim();
+  const username = String(p.username || "").trim();
   const sheet = getPaymentsSheet_();
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).toLowerCase() === username.toLowerCase()) {
       sheet.deleteRow(i + 1);
+      logAction_(ADMIN_USERNAME, "Delete Payment", username, "");
       return { success: true, deleted: username };
     }
   }
@@ -762,7 +944,7 @@ function adminDeletePayment(p) {
 
 function adminUpdateSettings(p) {
   if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
-  const key = (p.key || "").trim();
+  const key = String(p.key || "").trim();
   const value = (p.value !== undefined) ? p.value : "";
   if (!key) return { success: false, error: "Setting key required." };
 
@@ -772,11 +954,45 @@ function adminUpdateSettings(p) {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === key) {
       sheet.getRange(i + 1, 2).setValue(value);
+      logAction_(ADMIN_USERNAME, "Update Setting", key, "New value: " + value);
       return { success: true, key, value };
     }
   }
   sheet.appendRow([key, value]);
+  logAction_(ADMIN_USERNAME, "Update Setting", key, "New value: " + value);
   return { success: true, key, value };
+}
+
+function adminUpdateSettingsBatch(p) {
+  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const incoming = p.settings;
+  if (!Array.isArray(incoming) || !incoming.length) {
+    return { success: false, error: "settings array required." };
+  }
+
+  const sheet = getSettingsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const rowByKey = {};
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0]) rowByKey[String(data[i][0])] = i + 1;
+  }
+
+  const applied = [];
+  for (const s of incoming) {
+    const key = String(s.key || "").trim();
+    if (!key) continue;
+    const value = (s.value !== undefined) ? s.value : "";
+    if (rowByKey[key]) {
+      sheet.getRange(rowByKey[key], 2).setValue(value);
+    } else {
+      sheet.appendRow([key, value]);
+      rowByKey[key] = sheet.getLastRow();
+    }
+    applied.push(key);
+  }
+
+  logAction_(ADMIN_USERNAME, "Update Settings (batch)", applied.join(", "), "");
+  return { success: true, updated: applied };
 }
 
 function adminStats(p) {
