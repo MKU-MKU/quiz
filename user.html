@@ -487,7 +487,7 @@ input[type=file]:hover{border-color:var(--amb)}
 
       <!-- ONLINE STUDY -->
       <div class="view" id="view-online">
-        <div class="ph"><h2>☁️ Online Study</h2><p>Level → Chapter → Subtopic → Mode</p></div>
+        <div class="ph"><h2>☁️ Online Study</h2><p>Level → Chapter → Book → Subtopic → Mode</p></div>
         <div class="on-card-banner"><span>📡</span> Questions stream from Google Drive and cache automatically for offline use.</div>
         <div id="on-offline-warn" style="display:none;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:var(--r2);padding:.65rem .9rem;margin-bottom:.75rem;font-size:.74rem;color:var(--ros)">
           📡 <strong>You're offline.</strong> Only cached question sets will load. <a onclick="UI.go('offline')" style="color:var(--amb);cursor:pointer;text-decoration:underline">Go to Offline Cache →</a>
@@ -496,6 +496,7 @@ input[type=file]:hover{border-color:var(--amb)}
           <div class="card-hd"><h3>Content Selector</h3><span class="ctag tc">Google Drive</span></div>
           <select class="sel-c" id="on-lv" onchange="ON.onLv()"><option value="">📖 Select Level…</option><option value="level5">Level 5 — Diploma</option><option value="level7">Level 7 — Civil Engineering</option><option value="gk">General Knowledge</option><option value="old_question">Old Questions / Sets</option></select>
           <select class="sel-c" id="on-ch" disabled onchange="ON.onCh()"><option>📘 Select Chapter…</option></select>
+          <select class="sel-c" id="on-bk" disabled onchange="ON.onBook()"><option>📚 Select Book…</option></select>
           <select class="sel-c" id="on-to" disabled><option>📑 Select Subtopic…</option></select>
           <hr>
           <div class="bg">

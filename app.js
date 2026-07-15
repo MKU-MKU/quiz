@@ -10,13 +10,12 @@
    respectively.
 
    SECTIONS:
-     1. Config & constants        7. UI (routing/sidebar/theme)
-     2. App state (S)             8. SB / ON / LOC / PSY (start quiz)
-     3. Utility functions         9. REV (bookmarks/flagged/wrong)
-     4. AUTH (session gate only) 10. QUIZ engine
-     5. PWA                      11. HOME/PROG/DATA/CACHE/TT
-     6. (admin panel removed —   12. APP boot
-         see admin.html)
+     1. Config & constants        7. UI/ON/LOC/PSY (start quiz)
+     2. App state (S)             9. REV (bookmarks/flagged/wrong)
+     3. Utility functions        10. QUIZ engine
+     4. AUTH (session gate only) 11. HOME/PROG/DATA/CACHE/TT
+     5. PWA                      12. APP boot
+     6. (admin panel removed — see admin.html)
 ═══════════════════════════════════════════════════════════════ */
 
 /* ═══════════════ 1. CONFIG & CONSTANTS ═══════════════ */
@@ -381,6 +380,7 @@ const ON = {
     const lv=document.getElementById('on-lv').value;
     const cs=document.getElementById('on-ch');
     cs.innerHTML='<option>📘 Select Chapter…</option>';cs.disabled=!lv;
+    const bs=document.getElementById('on-bk');bs.innerHTML='<option>📚 Select Book…</option>';bs.disabled=true;
     const ts=document.getElementById('on-to');ts.innerHTML='<option>📑 Select Subtopic…</option>';ts.disabled=true;
     if(!lv)return;
     Object.entries(ChapterData.chapters(lv)).forEach(([k,n])=>{
@@ -390,20 +390,38 @@ const ON = {
   },
   onCh(){
     const lv=document.getElementById('on-lv').value,ch=document.getElementById('on-ch').value;
+    const bs=document.getElementById('on-bk');
+    bs.innerHTML='<option>📚 Select Book…</option>';bs.disabled=true;
+    const ts=document.getElementById('on-to');ts.innerHTML='<option>📑 Select Subtopic…</option>';ts.disabled=true;
+    if(!lv||!ch)return;
+    const books=ChapterData.books(lv,ch);
+    if(!Object.keys(books).length){
+      bs.innerHTML='<option>No books yet for this chapter</option>';
+      toast('ℹ️ This chapter has no question files yet');
+      return;
+    }
+    Object.keys(books).forEach(book=>{
+      const fc=ChapterData.fileCount(lv,ch,book);
+      const o=document.createElement('option');o.value=book;o.textContent=`${book}${fc?'':' (coming soon)'}`;bs.appendChild(o);
+    });
+    bs.disabled=false;
+  },
+  onBook(){
+    const lv=document.getElementById('on-lv').value,ch=document.getElementById('on-ch').value,book=document.getElementById('on-bk').value;
     const ts=document.getElementById('on-to');
     ts.innerHTML='<option>📑 Select Subtopic…</option>';ts.disabled=true;
-    if(!lv||!ch)return;
-    const files=ChapterData.files(lv,ch);
+    if(!lv||!ch||!book)return;
+    const files=ChapterData.files(lv,ch,book);
     if(!Object.keys(files).length){
-      ts.innerHTML='<option>No files yet for this chapter</option>';
-      toast('ℹ️ This chapter has no question files yet');
+      ts.innerHTML='<option>No files yet for this book</option>';
+      toast('ℹ️ This book has no question files yet');
       return;
     }
     const isOfflineMode = !S.online || S.forcedOffline;
     let anyEnabled = false;
     Object.entries(files).forEach(([n,id])=>{
       if(!id)return;
-      const cacheKey = `${lv}_${ch}_${n}`;
+      const cacheKey = `${lv}_${ch}_${book}_${n}`;
       const cached = _load(LS.QC+cacheKey, null);
       const isCached = cached && !(typeof cached==='object' && !Array.isArray(cached) && cached.success===false);
       const o=document.createElement('option');
@@ -421,16 +439,16 @@ const ON = {
     });
     ts.disabled=false;
     if(isOfflineMode && !anyEnabled){
-      ts.innerHTML='<option>No cached files for this chapter</option>';
-      toast('📡 You\'re offline — no cached files in this chapter. Cache them first while online.');
+      ts.innerHTML='<option>No cached files for this book</option>';
+      toast('📡 You\'re offline — no cached files in this book. Cache them first while online.');
     }
   },
   start(mode){
     const ts=document.getElementById('on-to');
     const fid=ts.value,key=ts.options[ts.selectedIndex]?.dataset?.key;
-    const ch=document.getElementById('on-ch').value,lv=document.getElementById('on-lv').value;
+    const ch=document.getElementById('on-ch').value,lv=document.getElementById('on-lv').value,book=document.getElementById('on-bk').value;
     if(!fid||!key){toast('Select a subtopic');return}
-    const name=ChapterData.chapterName(lv,ch);
+    const name=`${ChapterData.chapterName(lv,ch)} — ${book}`;
     QUIZ.load(fid,key,mode,name);
   }
 };
@@ -499,18 +517,17 @@ const PSY = {
   async start(type){
     const cbs=[...document.querySelectorAll('#psy-levels input:checked')];
     if(!cbs.length){toast('Select at least one chapter');return}
-    const totalFiles = cbs.reduce((n,cb)=>n+Object.keys(ChapterData.files(cb.dataset.lv,cb.value)).length,0);
+    const totalFiles = cbs.reduce((n,cb)=>n+ChapterData.chapterFileRefs(cb.dataset.lv,cb.value).length,0);
     QUIZ._showLoader(`Loading ${cbs.length} chapter${cbs.length>1?'s':''} (0/${totalFiles})…`);
     const all=[];
     let done=0,failed=0;
     for(const cb of cbs){
       const lv=cb.dataset.lv;
       const ch=cb.value;
-      for(const[name,fid] of Object.entries(ChapterData.files(lv,ch))){
-        if(!fid)continue;
+      for(const ref of ChapterData.chapterFileRefs(lv,ch)){
         try{
-          const raw=await QUIZ._fetch(fid,`${lv}_${ch}_${name}`);
-          all.push(...normQ(raw,fid));
+          const raw=await QUIZ._fetch(ref.fid,ref.key);
+          all.push(...normQ(raw,ref.fid));
           done++;
           document.getElementById('quiz-loader-msg').textContent=`Loading files (${done}/${totalFiles})…`;
         }catch{ failed++; }
@@ -1736,7 +1753,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
 window.AUTH = AUTH;
 window.NET = NET;
 window.UI = UI;
-window.SB = SB;
 window.ON = ON;
 window.LOC = LOC;
 window.PSY = PSY;

@@ -649,15 +649,21 @@ const APP = {
   /* ── Payment UI ── */
   async loadPaymentUI() {
     let s = this.settings || {};
-    // Try fetch fresh settings if online
-    if (this.online && Object.keys(s).length === 0) {
+    // Always try to fetch fresh settings when online, so a change made in
+    // admin.html (on any device) shows up here immediately instead of only
+    // for browsers that have never cached a settings object before.
+    if (this.online) {
       try {
         const r = await this.api('getSettings', {});
         if (r.success) s = r.settings || {};
       } catch (e) {}
     }
-    // Fallback to session cached settings
-    if (this.session && this.session.settings) s = { ...this.session.settings, ...s };
+    // Offline fallback: use whatever was cached in this session, if anything.
+    if (Object.keys(s).length === 0 && this.session && this.session.settings) {
+      s = { ...this.session.settings };
+    }
+    // Keep the session's cached copy fresh for the offline case above.
+    if (this.session) { this.session.settings = s; this.saveSession(this.session); }
 
     document.getElementById('pay-amt').textContent = s.paymentAmount || '100';
     document.getElementById('pay-phone').textContent = '📞 ' + (s.contactPhone || '9863200285');
