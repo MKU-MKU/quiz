@@ -30,6 +30,11 @@ const APPS = APP_CONFIG.APPS_URL;
 const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 // Optional labels for organizing Bookmarks — assign one per bookmarked question.
 const BK_TAGS = ['Need Check','Interesting','Debating','Confusing','Formulae'];
+// Spaced-repetition schedule for the Wrong Bank: after N consecutive correct
+// answers, a question is due again after SR_INTERVALS[N-1] days. Once a
+// question has been answered correctly SR_INTERVALS.length times in a row,
+// it's considered mastered and drops out of the Wrong Bank entirely.
+const SR_INTERVALS = [1, 3, 7, 14]; // days
 const LS = {
   // ⚠️ Must be the EXACT SAME key as index.html's localStorage.setItem('hau_session', ...).
   // index.html is the only place that writes this key. Do not rename either side alone.
@@ -59,6 +64,24 @@ const S = {
 function _load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}}
 function _save(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{toast('⚠️ Storage full — some data not saved');return false}}
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+// Optional math-formula rendering. Question banks can write LaTeX between
+// $...$ (inline) or $$...$$ (block) and it'll render via KaTeX; plain-text
+// questions (the vast majority of existing content, which already uses
+// Unicode like π²EI/4L²) are completely unaffected since they contain no
+// $ delimiters. Safe no-op if KaTeX hasn't loaded yet (e.g. first paint
+// while offline) or failed to load at all.
+function renderMath(el){
+  if(!el || typeof window.renderMathInElement !== 'function') return;
+  try{
+    window.renderMathInElement(el, {
+      delimiters: [
+        {left:'$$', right:'$$', display:true},
+        {left:'$', right:'$', display:false}
+      ],
+      throwOnError:false
+    });
+  }catch(e){ /* malformed LaTeX in a question shouldn't break the quiz */ }
+}
 function shuf(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b}
 function fmt(s){if(s<0)s=0;return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
 function today(){return new Date().toISOString().slice(0,10)}
@@ -577,8 +600,8 @@ const REV = {
 
   addWrong(question){
     const existing = S.wr.find(x=>x.uid===question.uid);
-    if(existing){ existing._streak = 0; _save(LS.WR, S.wr); HOME.updateBadges(); return; }
-    S.wr.push({...question, _streak:0});
+    if(existing){ existing._streak = 0; existing._nextDue = Date.now(); _save(LS.WR, S.wr); HOME.updateBadges(); return; }
+    S.wr.push({...question, _streak:0, _nextDue: Date.now()});
     _save(LS.WR, S.wr);
     HOME.updateBadges();
   },
@@ -587,28 +610,43 @@ const REV = {
     if(i>-1){ S.wr.splice(i,1); _save(LS.WR, S.wr); HOME.updateBadges(); }
   },
   // Call this instead of addWrong/removeWrong directly when scoring an
-  // answer — a question only leaves the Wrong Bank once it's been
-  // answered correctly two times in a row (a single lucky guess doesn't
-  // clear it).
+  // answer. A question only leaves the Wrong Bank once it's cleared every
+  // step of the spaced-repetition schedule (SR_INTERVALS) — one lucky guess
+  // doesn't clear it, and correctly-answered questions come back for review
+  // at increasing intervals (1 day → 3 days → 7 days → 14 days) rather than
+  // just "answer right twice in a row with no regard for timing."
   trackAnswer(question, isCorrect){
     if(isCorrect){
       const item = S.wr.find(x=>x.uid===question.uid);
       if(!item) return; // wasn't in the wrong bank, nothing to track
       item._streak = (item._streak||0) + 1;
-      if(item._streak >= 2){ REV.removeWrong(question.uid); }
-      else { _save(LS.WR, S.wr); }
+      if(item._streak >= SR_INTERVALS.length){ REV.removeWrong(question.uid); }
+      else {
+        const days = SR_INTERVALS[item._streak - 1];
+        item._nextDue = Date.now() + days*24*60*60*1000;
+        _save(LS.WR, S.wr);
+      }
     } else {
       REV.addWrong(question);
     }
   },
+  // Items due for review now (or items with no schedule yet, e.g. carried
+  // over from before this feature existed — treated as immediately due so
+  // nothing old silently disappears from view).
+  dueWrong(){ return S.wr.filter(x => (x._nextDue==null) || x._nextDue <= Date.now()); },
+  dueCount(){ return REV.dueWrong().length; },
 
   renderList(kind){
-    const arr = REV._store(kind);
+    let arr = REV._store(kind);
     const el = document.getElementById(REV._listEl(kind));
     if(!el)return;
     if(!arr.length){
       el.innerHTML = `<div class="empty"><div class="empty-i">${kind==='bk'?'⭐':kind==='fl'?'🚩':'❌'}</div><p>Nothing here yet</p></div>`;
       return;
+    }
+    if(kind==='wr'){
+      // Due-for-review items first, then items scheduled for later (soonest first).
+      arr = [...arr].sort((a,b)=>(a._nextDue??0)-(b._nextDue??0));
     }
     el.innerHTML = arr.map((q,i)=>{
       const opts=(q.options||[]).map((o,j)=>{
@@ -620,9 +658,21 @@ const REV = {
           <option value="">🏷 No tag</option>
           ${BK_TAGS.map(t=>`<option value="${t}" ${q.tag===t?'selected':''}>${t}</option>`).join('')}
         </select>` : '';
+      let srBadge = '';
+      if(kind==='wr'){
+        const isDue = (q._nextDue==null) || q._nextDue<=Date.now();
+        const streak = q._streak||0;
+        if(isDue){ srBadge = `<span class="ctag tr" style="margin-left:.3rem">🔁 Due now</span>`; }
+        else {
+          const daysLeft = Math.ceil((q._nextDue-Date.now())/(24*60*60*1000));
+          srBadge = `<span class="ctag ta" style="margin-left:.3rem">⏳ Due in ${daysLeft}d</span>`;
+        }
+        if(streak>0) srBadge += `<span class="ctag tg" style="margin-left:.3rem">✓×${streak}</span>`;
+      }
       return `<div class="qcard" style="margin-bottom:.5rem">
         <div class="qm"><span class="qn mono">#${i+1}</span>
           ${q.tag ? `<span class="ctag ta" style="margin-left:.3rem">🏷 ${esc(q.tag)}</span>` : ''}
+          ${srBadge}
           <button class="ib" onclick="REV._removeOne('${kind}','${esc(q.uid||'')}')">🗑</button>
         </div>
         <div class="qt" style="font-size:.82rem">${esc(q.q)}</div>
@@ -631,6 +681,7 @@ const REV = {
         ${tagPicker}
       </div>`;
     }).join('');
+    renderMath(el);
   },
   _removeOne(kind, uid){
     const arr=REV._store(kind);
@@ -645,10 +696,11 @@ const REV = {
     REV.renderList(kind); HOME.updateBadges();
     toast('🗑 Cleared');
   },
-  start(kind, mode){
-    const arr=[...REV._store(kind)];
-    if(!arr.length){toast('Nothing to study here yet');return}
-    QUIZ.startWith(shuf(arr), mode, kind==='bk'?'⭐ Bookmarks':kind==='fl'?'🚩 Flagged':'❌ Wrong Bank');
+  start(kind, mode, dueOnly){
+    let arr = [...REV._store(kind)];
+    if(kind==='wr' && dueOnly) arr = REV.dueWrong();
+    if(!arr.length){toast(dueOnly?'Nothing due for review right now 🎉':'Nothing to study here yet');return}
+    QUIZ.startWith(shuf(arr), mode, kind==='bk'?'⭐ Bookmarks':kind==='fl'?'🚩 Flagged':(dueOnly?'🔁 Wrong Bank (Due Today)':'❌ Wrong Bank'));
   }
 };
 
@@ -889,6 +941,51 @@ const QUIZ = {
     })();
   },
 
+  // Adaptive Practice: builds a session weighted toward what you're
+  // actually struggling with, rather than pure random content.
+  // Priority order: (1) Wrong Bank items due today (spaced repetition),
+  // (2) bookmarks tagged "Confusing" or "Need Check", (3) fresh random
+  // questions to fill up to a reasonable session size. No network calls
+  // needed for (1)/(2) — they're already stored locally.
+  async adaptive(){
+    const TARGET = 25;
+    const seen = new Set();
+    const pool = [];
+    const addAll = list => { for(const q of list){ if(q && q.uid && !seen.has(q.uid)){ seen.add(q.uid); pool.push(q); } } };
+
+    addAll(REV.dueWrong());
+    addAll(S.bk.filter(q => q.tag==='Confusing' || q.tag==='Need Check'));
+
+    if(pool.length >= TARGET){
+      QUIZ.startWith(shuf(pool).slice(0,TARGET), 'flashcard', '🎯 Adaptive Practice');
+      return;
+    }
+
+    const refs = ChapterData.allFileRefs();
+    if(!refs.length){
+      if(pool.length){ QUIZ.startWith(shuf(pool), 'flashcard', '🎯 Adaptive Practice'); return; }
+      toast('No content configured yet'); return;
+    }
+    toast('⏳ Building your adaptive practice set…');
+    const need = TARGET - pool.length;
+    const picks = shuf(refs).slice(0, Math.min(8, refs.length));
+    let failed = 0;
+    for(const ref of picks){
+      if(pool.length - (TARGET-need) >= need*2) break; // don't over-fetch once we clearly have enough
+      try{
+        const raw = await QUIZ._fetch(ref.fid, ref.key);
+        addAll(normQ(raw, ref.fid));
+      }catch(e){
+        failed++;
+        console.warn('[adaptive] Failed to load', ref.key, e.message);
+      }
+    }
+    if(!pool.length){ toast('❌ Could not build a practice set — try caching data first'); return; }
+    if(failed>0) toast(`⚠️ ${failed} file(s) failed — practice set uses what loaded`);
+    QUIZ.startWith(shuf(pool).slice(0,TARGET), 'flashcard', '🎯 Adaptive Practice');
+  },
+
+
   _startTimer(){
     QUIZ._stopTimer();
     S.quiz.timer = setInterval(()=>{
@@ -991,6 +1088,7 @@ const QUIZ = {
       document.getElementById('fc-next').textContent = S.quiz.idx===S.quiz.qs.length-1 ? 'Finish ✔' : 'Next →';
 
       QUIZ._updateFcCounts();
+      renderMath(document.getElementById('fc-wrap'));
     } catch(err){
       console.error('[QUIZ._renderFlashcard] question at idx', S.quiz.idx, 'failed to render:', err, q);
       toast('⚠️ Skipped a malformed question', 2000);
@@ -1068,6 +1166,7 @@ const QUIZ = {
         `).join('')}
       </div>
     `}).join('');
+    renderMath(el);
   },
   exAnswer(qi, oi){
     if(!S.quiz.active)return;
@@ -1147,6 +1246,7 @@ const QUIZ = {
         ${q.explanation?`<div class="expl show">${esc(q.explanation)}</div>`:''}
       </div>`;
     }).join('');
+    renderMath(document.getElementById('res-review'));
 
     if(pct>=70 && window.confetti){ confetti({particleCount:90,spread:75,origin:{y:0.6}}); }
     PROG.recordSession({chapter:S.quiz.ch, mode:S.quiz.mode, total, correct, wrong, skipped, pct, at:Date.now()});
@@ -1351,8 +1451,11 @@ const HOME = {
   },
   updateBadges(){
     const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v};
+    const dueWr = REV.dueCount();
     set('bkc', S.bk.length); set('flc', S.fl.length); set('wrc', S.wr.length);
-    const total = S.bk.length + S.fl.length + S.wr.length;
+    const wrDueEl = document.getElementById('wrc-due');
+    if(wrDueEl) wrDueEl.textContent = dueWr;
+    const total = S.bk.length + S.fl.length + dueWr;
     const bnBadge = document.getElementById('bn-badge');
     if(bnBadge){
       if(total>0){ bnBadge.textContent = total>99?'99+':total; bnBadge.style.display=''; }
