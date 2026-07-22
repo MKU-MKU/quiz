@@ -1,11 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════
    SW.JS — HAMRO AFNAI  Service Worker  
    Strategy:
-   • App shell  → stale-while-revalidate (cache-first, update in bg)
+   • App shell  → network-first, cache only as an offline fallback
    • API/Drive  → network-first, offline JSON fallback
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'ha-shell-v7'; // Bumped version
+const CACHE_NAME = 'ha-shell-v8'; // Bumped — v7's stale-while-revalidate strategy below was serving old index.html/admin.html/app.js indefinitely; this forces every existing installed copy to drop its stale cache on next activate.
 const SHELL = [
   './',
   './index.html',        // ← ADD: login gateway
@@ -70,25 +70,25 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  /* ── App shell: stale-while-revalidate (FIXED) ── */
+  /* ── App shell: network-first ──
+     Previously this was stale-while-revalidate — it returned whatever was
+     already in Cache Storage immediately, every single time, and only
+     updated the cache in the background for the *next* load. That's a
+     separate cache from the browser's normal HTTP cache, so a hard
+     refresh doesn't touch it — every deploy of index.html/admin.html/
+     app.js was silently losing that race indefinitely for anyone who'd
+     already loaded the app once. Network-first means you always get the
+     live file when online, and only fall back to the cached copy when
+     the network request actually fails (offline use). */
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const fetchPromise = fetch(e.request.clone())
-        .then(res => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-          }
-          return res;
-        })
-        .catch(() => {
-          // Network failed — return cached if we have it
-          return cached || new Response('Offline', {status: 503});
-        });
-
-      // Return cached immediately (stale-while-revalidate), 
-      // or wait for network if nothing in cache
-      return cached || fetchPromise;
-    })
+    fetch(e.request.clone())
+      .then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request).then(cached => cached || new Response('Offline', {status: 503})))
   );
 });
