@@ -323,6 +323,7 @@ const APP = {
 
   /* ── Network ── */
   async checkNet() {
+    const wasOnline = this.online;
     const dot = document.getElementById('ndot');
     const txt = document.getElementById('nstat');
     const badge = document.getElementById('offline-badge');
@@ -337,6 +338,16 @@ const APP = {
       dot.className = 'ndot';
       txt.textContent = 'Backend connected';
       badge.classList.remove('show');
+      // We just found out we're online (or confirmed we still are) while
+      // sitting on the payment screen — that screen shows the QR/amount
+      // fetched from getSettings(), and if the very first ping on page
+      // load failed/timed out (Apps Script cold starts are often slow),
+      // loadPaymentUI() would have already rendered placeholders using
+      // this.online === false and never gotten a second chance. Refresh
+      // it now that we know the backend is actually reachable.
+      if (!wasOnline && this.mode === 'payment') {
+        this.loadPaymentUI();
+      }
     } catch (e) {
       this.online = false;
       dot.className = 'ndot off';
