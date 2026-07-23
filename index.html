@@ -713,6 +713,19 @@ const APP = {
     // Keep the session's cached copy fresh for the offline case above.
     if (this.session) { this.session.settings = s; this.saveSession(this.session); }
 
+    // Built-in diagnostic log — check the browser console (F12) on every
+    // payment-screen load to see exactly what settings came back, without
+    // needing to paste a separate snippet each time.
+    const qrVal = s.qrCodeUrl || '';
+    console.log('%c[Payment Settings]', 'color:#F5A623;font-weight:bold', {
+      source: fetchFailed ? 'fetch failed — using cached/default' : (this.online ? 'live from backend' : 'offline cache'),
+      paymentAmount: s.paymentAmount,
+      contactPhone: s.contactPhone,
+      qrCodeUrl_length: qrVal.length,
+      qrCodeUrl_validFormat: qrVal.startsWith('data:image') || qrVal.startsWith('http'),
+      qrCodeUrl_preview: qrVal ? qrVal.slice(0, 40) + '…' : '(empty — no QR uploaded yet)'
+    });
+
     document.getElementById('pay-amt').textContent = s.paymentAmount || '100';
     document.getElementById('pay-phone').textContent = '📞 ' + (s.contactPhone || '9863200285');
     document.getElementById('pay-inst').textContent = s.paymentInstructions || 'Scan the QR code and submit your transaction ID for verification.';
