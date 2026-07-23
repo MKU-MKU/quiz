@@ -421,13 +421,14 @@ const APP = {
     this.hideErr();
     if (m !== 'trial') this.clearTrialTimer();
 
-    // Auto-refresh payment settings (amount/phone/instructions/QR) every 20s
-    // while the payment screen is open, so an admin edit made in admin.html
-    // shows up on an already-open payment page on its own — previously this
-    // only happened once, whenever the screen was first entered, so a
-    // change made mid-visit needed a manual reload (or the console snippet)
-    // to appear. Cleared the moment the user leaves the payment screen.
+    // Refresh payment settings (amount/phone/instructions/QR) the instant
+    // the payment screen is entered — clicking "Pay Now" used to only call
+    // setMode('payment') with no immediate fetch, so it showed the static
+    // HTML defaults (Rs 100, no QR) until the first periodic refresh fired.
+    // Then keep refreshing every 20s for as long as the screen stays open,
+    // so an admin edit made mid-visit shows up on its own too.
     if (m === 'payment') {
+      this.loadPaymentUI();
       if (!this._payRefreshTimer) {
         this._payRefreshTimer = setInterval(() => {
           if (this.mode === 'payment' && this.online) this.loadPaymentUI();
@@ -593,9 +594,8 @@ const APP = {
       this.setMode('trial');
     } else if (access.level === 'expired') {
       this.settings = res.settings || {};
-      this.loadPaymentUI();
       document.getElementById('pay-banner').style.display = 'block';
-      this.setMode('payment');
+      this.setMode('payment'); // setMode itself now triggers an immediate loadPaymentUI()
     } else {
       this.showErr(res.error || 'Account issue. Contact admin.');
     }
@@ -623,9 +623,8 @@ const APP = {
     }
     if (saved.access && saved.access.level === 'expired') {
       this.settings = saved.settings || {};
-      this.loadPaymentUI();
       document.getElementById('pay-banner').style.display = 'block';
-      this.setMode('payment');
+      this.setMode('payment'); // setMode itself now triggers an immediate loadPaymentUI()
       return;
     }
     if (saved.access && saved.access.level === 'pending') {
@@ -680,9 +679,8 @@ const APP = {
           this.session.access.level = 'expired';
           this.saveSession(this.session);
         }
-        this.loadPaymentUI();
         document.getElementById('pay-banner').style.display = 'block';
-        this.setMode('payment');
+        this.setMode('payment'); // setMode itself now triggers an immediate loadPaymentUI()
         return;
       }
       const h = String(Math.floor(diff / 3600000)).padStart(2, '0');
