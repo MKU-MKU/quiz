@@ -209,6 +209,9 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
     <div class="expired-banner" id="pay-banner" style="display:none">
       <strong>⏰ Trial Expired</strong><br>Complete payment to unlock permanent access.
     </div>
+    <div class="expired-banner" id="pay-settings-warn" style="display:none">
+      <strong>⚠️ Couldn't refresh payment details from the server.</strong><br>Showing the last known info — reload the page once you're back online.
+    </div>
     <div class="qr-wrap">
       <div class="qr-fallback" id="qr-fallback">📷</div>
       <img id="qr-img" style="display:none" alt="Payment QR" onerror="APP.onQrError()">
@@ -685,14 +688,23 @@ const APP = {
   async loadPaymentUI() {
     this.updatePayButtonState();
     let s = this.settings || {};
+    let fetchFailed = false;
     // Always try to fetch fresh settings when online, so a change made in
     // admin.html (on any device) shows up here immediately instead of only
     // for browsers that have never cached a settings object before.
     if (this.online) {
       try {
         const r = await this.api('getSettings', {});
-        if (r.success) s = r.settings || {};
-      } catch (e) {}
+        if (r.success) {
+          s = r.settings || {};
+        } else {
+          fetchFailed = true;
+          console.warn('getSettings returned success:false —', r.error || '(no error message)');
+        }
+      } catch (e) {
+        fetchFailed = true;
+        console.warn('getSettings request threw —', e);
+      }
     }
     // Offline fallback: use whatever was cached in this session, if anything.
     if (Object.keys(s).length === 0 && this.session && this.session.settings) {
@@ -715,6 +727,11 @@ const APP = {
       img.style.display = 'none';
       fb.style.display = 'flex';
     }
+    // Make a real fetch failure visible instead of silently looking like
+    // "no QR uploaded yet" — this is the exact ambiguity that made a live
+    // outage indistinguishable from an empty setting.
+    const warn = document.getElementById('pay-settings-warn');
+    if (warn) warn.style.display = (this.online && fetchFailed) ? 'block' : 'none';
   },
 
   onQrError() {
