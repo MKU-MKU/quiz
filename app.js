@@ -41,8 +41,18 @@ const LS = {
   USER:'hau_session',
   PROG:'ha_prog', BK:'ha_bk', FL:'ha_fl', WR:'ha_wr',
   QC:'ha_qc_', TT:'ha_tt', STK:'ha_stk',
-  FORCED_OFFLINE:'ha_forced_off'
+  FORCED_OFFLINE:'ha_forced_off',
+  EXAM_SNAP:'ha_exam_snap'
 };
+
+// Bump this on every release that ships to production, so a support
+// conversation can start with "what version are you on" instead of
+// guessing from symptoms. This is the ONLY place it's defined for the
+// user-facing app — CODE.GS has its own matching APP_VERSION (surfaced
+// via the `ping` action) since it's a separate deployable; keep both in
+// sync by hand when bumping. Displayed in user.html's sidebar footer
+// (#sb-version) — see APP.init().
+const APP_VERSION = '10.0';
 
 /* ═══════════════ 2. APP STATE ═══════════════ */
 const S = {
@@ -62,7 +72,122 @@ const S = {
 
 /* ═══════════════ 3. UTILITIES ═══════════════ */
 function _load(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}}
-function _save(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{toast('⚠️ Storage full — some data not saved');return false}}
+const PSYNC_KEYS = new Set([LS.BK, LS.FL, LS.WR, LS.PROG, LS.STK]);
+function _save(k,v){try{localStorage.setItem(k,JSON.stringify(v));if(PSYNC_KEYS.has(k)) PSYNC.scheduleSync();return true}catch{toast('⚠️ Storage full — some data not saved');return false}}
+
+/* ── QDB: IndexedDB-backed question-set cache ────────────────────
+   Question-set JSON used to live in localStorage under LS.QC+key, but
+   localStorage is capped at roughly 5-10MB per origin — easy to exceed
+   once a student tries to cache the whole content library for offline
+   use, especially as it grows. IndexedDB carries no such practical
+   ceiling for this kind of use, and writes are async so large sets don't
+   block the UI thread the way JSON.stringify into localStorage does.
+   Everything else (bookmarks, progress, streaks, the session) stays in
+   localStorage — it's small and structured and doesn't need this.
+   Keys here are the same bare cacheKey strings that used to follow
+   LS.QC — the 'ha_qc_' prefix isn't needed since this has its own store. */
+const QDB = (() => {
+  const DB_NAME = 'ha_question_cache';
+  const STORE = 'sets';
+  let dbPromise = null;
+
+  function open() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error('IndexedDB not supported')); return; }
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
+  }
+
+  async function get(key) {
+    try {
+      const db = await open();
+      return await new Promise((resolve, reject) => {
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
+        req.onsuccess = () => resolve(req.result !== undefined ? req.result : null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { return null; }
+  }
+
+  async function set(key, value) {
+    try {
+      const db = await open();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      return true;
+    } catch (e) {
+      // Same failure contract as _save(): swallow it, tell the user, and
+      // return false so the caller (QUIZ._fetch) can turn it into a real
+      // error instead of silently claiming the set was cached.
+      toast('⚠️ Storage full — some data not saved');
+      return false;
+    }
+  }
+
+  async function del(key) {
+    try {
+      const db = await open();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {}
+  }
+
+  async function keys() {
+    try {
+      const db = await open();
+      return await new Promise((resolve, reject) => {
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { return []; }
+  }
+
+  async function clear() {
+    try {
+      const db = await open();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) {}
+  }
+
+  // One-time upgrade path: anyone who already has sets cached under the
+  // old LS.QC+key localStorage scheme gets them copied into IndexedDB on
+  // their next app load, then the localStorage copies are removed so
+  // they don't keep counting against the small localStorage quota. Safe
+  // to call every boot — it's a no-op once nothing with the LS.QC prefix
+  // is left in localStorage.
+  async function migrateFromLocalStorage() {
+    const oldKeys = Object.keys(localStorage).filter(k => k.startsWith(LS.QC));
+    if (!oldKeys.length) return;
+    for (const k of oldKeys) {
+      try {
+        const value = JSON.parse(localStorage.getItem(k));
+        await set(k.slice(LS.QC.length), value);
+      } catch (e) { /* skip anything unparsable rather than fail the whole migration */ }
+      localStorage.removeItem(k);
+    }
+  }
+
+  return { get, set, del, keys, clear, migrateFromLocalStorage };
+})();
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 // Optional math-formula rendering. Question banks can write LaTeX between
 // $...$ (inline) or $$...$$ (block) and it'll render via KaTeX; plain-text
@@ -233,14 +358,19 @@ const AUTH = {
 
   // Mirrors index.html's handleUserAuth() access-building logic exactly,
   // so both files always agree on what "permanent / trial / expired /
-  // pending" means from the same checkSession response.
+  // pending_review" means from the same checkSession response. app.js only
+  // ever acts on 'permanent'/'trial' itself (anything else bounces to
+  // index.html, which owns that UI) but the level is still computed the
+  // same way here so a session object saved by either file means the same
+  // thing to the other.
   _buildSession(prevSession, res){
     const user = res.user || {};
     const access = {
       level: res.permanentAccess || user.status === 'active' ? 'permanent'
              : res.isTrial ? 'trial'
+             : res.needsPayment && user.status === 'payment_pending' ? 'pending_review'
              : res.needsPayment ? 'expired'
-             : 'pending',
+             : 'unknown',
       trialExpiresAt: res.trialExpiresAt || user.trialExpiresAt,
       permanent: !!(res.permanentAccess || user.status === 'active'),
       accessType: res.accessType || user.accessType || 'permanent',
@@ -270,6 +400,7 @@ const AUTH = {
     if(!S.online) document.getElementById('offbar').classList.add('show');
     APP.init();
     TUTORIAL.maybeAutoOpen(user);
+    PSYNC.pullIfEmpty();
   },
 
   _updateSidebarCard(user){
@@ -317,6 +448,88 @@ const AUTH = {
         }
       }catch{ /* ignore — don't punish for a flaky connection */ }
     }, 10*60*1000); // every 10 minutes
+  }
+};
+
+/* ═══════════════ 4b. PSYNC — background progress backup ═══════════════
+   Keeps a periodic, debounced copy of prog/bk/fl/wr/stk on the backend
+   (see CODE.GS's saveProgress/getProgress) so a lost device, a cleared
+   browser, or a fresh install on a new phone doesn't mean losing months
+   of quiz history — localStorage/IndexedDB alone are single-device.
+   This is a background best-effort backup, NOT the source of truth: the
+   app always reads from local state first; this only pushes a copy out
+   (debounced via _save()'s PSYNC_KEYS hook above) and offers a one-time
+   pull if local data is ever completely empty (see pullIfEmpty, called
+   once on app entry from AUTH._enter). It never overwrites existing
+   local progress — a device that already has data just keeps pushing,
+   it's never silently replaced by whatever's on the server. */
+const PSYNC = {
+  _timer: null,
+  _setStatus(msg){
+    const el = document.getElementById('psync-status');
+    if(el) el.textContent = msg;
+  },
+  scheduleSync(){
+    if(!S.user || !S.user.token) return; // not logged in yet (e.g. still restoring session)
+    clearTimeout(this._timer);
+    this._timer = setTimeout(()=>this.pushNow(), 8000); // coalesce rapid successive local saves into one request
+  },
+  async pushNow(){
+    if(!S.online || !S.user || !S.user.token) return;
+    const payload = JSON.stringify({prog:S.prog, bk:S.bk, fl:S.fl, wr:S.wr, stk:S.stk});
+    try{
+      const r = await netFetch(APPS, {
+        method:'POST',
+        headers:{'Content-Type':'text/plain'}, // matches index.html's own POST convention — Apps Script reads e.postData.contents regardless of the declared type, and text/plain avoids a CORS preflight
+        body: JSON.stringify({action:'saveProgress', username:S.user.username, token:S.user.token, data:payload})
+      }, 15000);
+      const res = await r.json();
+      if(res && res.success) this._setStatus('Last backed up: ' + new Date().toLocaleString());
+      else this._setStatus('Backup failed — will retry automatically.');
+    }catch(e){ this._setStatus('Backup failed (offline?) — will retry automatically.'); }
+  },
+  // Called once per app entry. If this device has NO local progress at
+  // all (a fresh install / new phone / cleared storage) and the server
+  // has a previously-synced backup, pulls it down instead of the student
+  // starting from zero. If there's anything here already, this is a
+  // no-op — pushNow is what keeps a device with existing data in sync
+  // from then on, this only ever fills in a genuinely empty one.
+  async pullIfEmpty(){
+    if(!S.online || !S.user || !S.user.token) return;
+    const looksEmpty = (!S.prog || !S.prog.sessions || !S.prog.sessions.length)
+      && (!S.bk || !S.bk.length) && (!S.fl || !S.fl.length) && (!S.wr || !S.wr.length);
+    if(!looksEmpty) return;
+    await this._pull(false);
+  },
+  // Explicit, user-triggered restore (Data panel → "Restore From Cloud")
+  // — unlike pullIfEmpty, this DOES overwrite whatever's on this device,
+  // which is why DATA.restoreCloud() confirms with the person first.
+  async forceRestore(){
+    if(!S.online || !S.user || !S.user.token){ toast('❌ Need internet to restore'); return; }
+    await this._pull(true);
+  },
+  async _pull(force){
+    try{
+      const r = await netFetch(`${APPS}?${qs({action:'getProgress', username:S.user.username, token:S.user.token})}`, {redirect:'follow'}, 15000);
+      const res = await r.json();
+      if(!res.success || !res.data){
+        if(force) toast('ℹ️ No cloud backup found for this account yet.');
+        return;
+      }
+      const data = JSON.parse(res.data);
+      if(data.prog){ S.prog=data.prog; _save(LS.PROG,S.prog); }
+      if(data.bk){ S.bk=data.bk; _save(LS.BK,S.bk); }
+      if(data.fl){ S.fl=data.fl; _save(LS.FL,S.fl); }
+      if(data.wr){ S.wr=data.wr; _save(LS.WR,S.wr); }
+      if(data.stk){ S.stk=data.stk; _save(LS.STK,S.stk); }
+      toast('☁️ Restored your progress from a previous device');
+      this._setStatus('Restored from cloud: ' + (res.updatedAt ? new Date(res.updatedAt).toLocaleString() : new Date().toLocaleString()));
+      if(typeof HOME!=='undefined') HOME.render();
+      if(typeof PROG!=='undefined') PROG.render();
+    }catch(e){
+      if(force) toast('❌ Restore failed — check your connection and try again.');
+      /* pullIfEmpty's silent path: local state stays exactly as it was */
+    }
   }
 };
 
@@ -430,7 +643,7 @@ const ON = {
     });
     bs.disabled=false;
   },
-  onBook(){
+  async onBook(){
     const lv=document.getElementById('on-lv').value,ch=document.getElementById('on-ch').value,book=document.getElementById('on-bk').value;
     const ts=document.getElementById('on-to');
     ts.innerHTML='<option>📑 Select Subtopic…</option>';ts.disabled=true;
@@ -442,12 +655,12 @@ const ON = {
       return;
     }
     const isOfflineMode = !S.online || S.forcedOffline;
+    const cachedKeys = new Set(await QDB.keys()); // one batch read instead of one IndexedDB round-trip per option
     let anyEnabled = false;
     Object.entries(files).forEach(([n,id])=>{
       if(!id)return;
       const cacheKey = `${lv}_${ch}_${book}_${n}`;
-      const cached = _load(LS.QC+cacheKey, null);
-      const isCached = cached && !(typeof cached==='object' && !Array.isArray(cached) && cached.success===false);
+      const isCached = cachedKeys.has(cacheKey);
       const o=document.createElement('option');
       o.value=id;
       o.dataset.key=cacheKey;
@@ -642,7 +855,12 @@ const REV = {
     const el = document.getElementById(REV._listEl(kind));
     if(!el)return;
     if(!arr.length){
-      el.innerHTML = `<div class="empty"><div class="empty-i">${kind==='bk'?'⭐':kind==='fl'?'🚩':'❌'}</div><p>Nothing here yet</p></div>`;
+      const copy = kind==='bk'
+        ? { i:'⭐', t:'No bookmarks yet', s:'Tap the star on any question while studying to save it here.' }
+        : kind==='fl'
+        ? { i:'🚩', t:'No flagged questions yet', s:'Tap the flag on a question you want to come back to.' }
+        : { i:'❌', t:'No wrong answers yet', s:'Questions you miss land here automatically, ready for spaced review.' };
+      el.innerHTML = `<div class="empty"><div class="empty-i">${copy.i}</div><p>${copy.t}</p><p style="font-size:.72rem;color:var(--t3);margin-top:.15rem">${copy.s}</p></div>`;
       return;
     }
     if(kind==='wr'){
@@ -708,14 +926,13 @@ const REV = {
 /* ═══════════════ 9. QUIZ ENGINE ═══════════════ */
 const QUIZ = {
   async _fetch(fileId, cacheKey, attempt=1){
-    const ck = LS.QC + cacheKey;
     function _validCache(v){
       if(!v) return false;
       if(v && typeof v === 'object' && !Array.isArray(v) && v.success === false) return false;
       return true;
     }
     if(!S.online){
-      const cached = _load(ck, null);
+      const cached = await QDB.get(cacheKey);
       if(_validCache(cached)) return cached;
       if(cached && !_validCache(cached)) throw new Error('Cached data is invalid (a previous network error was stored). Go online to refresh it.');
       throw new Error('You are offline and this set is not cached yet. Go to the Offline Cache tab to download it while online.');
@@ -738,11 +955,22 @@ const QUIZ = {
         throw new Error(data.error || 'Server returned an error for this file.');
       }
       if(_validCache(data)){
-        _save(ck, data);
+        // QDB.set() itself already swallows quota errors and shows a
+        // toast — but it also resolves to false when that happens, and
+        // this call site used to ignore that return value entirely (back
+        // when this was localStorage's _save()). That meant a bulk
+        // "download everything for offline" run could finish and report
+        // every set as cached even when storage was actually full and
+        // silently dropping writes partway through. Surface it as a real
+        // error instead so CACHE.dl()/autoSync() count it as a failure,
+        // not a success.
+        if(!(await QDB.set(cacheKey, data))){
+          throw new Error('Storage full — could not save this set for offline use. Clear some cached sets first.');
+        }
       }
       return data;
     } catch(err){
-      const cached = _load(ck, null);
+      const cached = await QDB.get(cacheKey);
       if(_validCache(cached)){ toast('📦 Loaded from cache (network error)'); return cached; }
       if(attempt < 2 && (err.message.includes('timed out') || err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))){
         toast('⚠️ Slow connection — retrying…');
@@ -755,8 +983,7 @@ const QUIZ = {
 
   async load(fileId, cacheKey, mode, chapterName){
     if(!S.online || S.forcedOffline){
-      const ck = LS.QC + cacheKey;
-      const cached = _load(ck, null);
+      const cached = await QDB.get(cacheKey);
       const isValid = cached && !(typeof cached === 'object' && !Array.isArray(cached) && cached.success === false);
       if(!isValid){
         QUIZ._showError('You are offline and this set is not cached yet. Go to the Offline Cache tab while online to download it.', null);
@@ -914,6 +1141,7 @@ const QUIZ = {
       return;
     }
     QUIZ._startTimer();
+    if(mode==='exam') QUIZ._snapshotExam();
   },
 
   daily(){
@@ -994,7 +1222,11 @@ const QUIZ = {
       if(S.quiz.mode==='exam'){
         S.quiz.left--;
         const tEl=document.getElementById('ex-tmr'); if(tEl) tEl.textContent=fmt(S.quiz.left);
-        if(S.quiz.left<=0){ toast('⏰ Time\'s up!'); QUIZ.submitExam(); }
+        if(S.quiz.left<=0){ toast('⏰ Time\'s up!'); QUIZ.submitExam(); return; }
+        // Every-second writes would be wasteful; every 15s is frequent
+        // enough that a crash never loses more than a few seconds of
+        // countdown accuracy, without hammering localStorage.
+        if(S.quiz.left % 15 === 0) QUIZ._snapshotExam();
       } else {
         S.quiz.elapsed++;
         const tEl=document.getElementById('fc-tmr'); if(tEl) tEl.textContent=fmt(S.quiz.elapsed);
@@ -1002,6 +1234,92 @@ const QUIZ = {
     },1000);
   },
   _stopTimer(){ if(S.quiz.timer){ clearInterval(S.quiz.timer); S.quiz.timer=null; } },
+
+  /* ── EXAM CRASH/RELOAD RECOVERY ──────────────────────────────────
+     S.quiz lives purely in memory while an exam is running — nothing
+     about a lost tab, a background PWA getting killed for memory on a
+     low-end phone, or an accidental reload used to survive that. This
+     snapshots the minimum needed to resume (question set, answers so
+     far, and the timer) to localStorage, throttled so it isn't a write
+     on every tick, and offers to resume on the next app load instead of
+     silently starting fresh. The timer is reconstructed from real wall-
+     clock elapsed time on resume, not just replayed from the saved
+     `left` value — otherwise repeatedly reloading would effectively
+     grant unlimited extra exam time. */
+  _snapshotExam(){
+    if(!S.quiz || !S.quiz.active || S.quiz.mode!=='exam' || !S.user) return;
+    _save(LS.EXAM_SNAP, {
+      username: S.user.username,
+      ch: S.quiz.ch,
+      qs: S.quiz.qs,
+      ans: S.quiz.ans,
+      left: S.quiz.left,
+      savedAt: Date.now()
+    });
+  },
+  _clearExamSnapshot(){ localStorage.removeItem(LS.EXAM_SNAP); },
+
+  // Called once from APP.init(). If there's a snapshot for THIS account
+  // (never someone else's, in case a device gets shared/re-logged-in)
+  // with time still on the clock once wall-clock elapsed time is
+  // deducted, offers to resume. If time had actually run out while the
+  // tab was gone, goes straight to grading whatever was answered instead
+  // of just discarding it — the student still gets credit for what they
+  // did before the crash.
+  checkResumableExam(){
+    const snap = _load(LS.EXAM_SNAP, null);
+    if(!snap || !S.user || snap.username !== S.user.username || !snap.qs || !snap.qs.length){
+      if(snap) QUIZ._clearExamSnapshot(); // stale/foreign snapshot — don't keep offering it forever
+      return;
+    }
+    const elapsedSinceSave = Math.floor((Date.now() - snap.savedAt) / 1000);
+    const adjustedLeft = snap.left - elapsedSinceSave;
+
+    if(adjustedLeft <= 0){
+      QUIZ._resumeSnapshot(snap, 0);
+      toast('⏰ Your exam timer ran out while you were away — showing your results.');
+      QUIZ.submitExam();
+      return;
+    }
+
+    const answered = snap.ans.filter(a=>a!==null).length;
+    const modal = document.createElement('div');
+    modal.id = 'exam-resume-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:10000;padding:1.5rem;backdrop-filter:blur(4px)';
+    modal.innerHTML = `
+      <div style="background:var(--c2);border:1px solid var(--bd);border-radius:var(--r3);padding:1.5rem;max-width:340px;width:100%;box-shadow:var(--sh3)">
+        <div style="font-size:1.2rem;margin-bottom:.35rem">📝</div>
+        <div style="font-family:var(--fd);font-size:.92rem;font-weight:700;color:var(--t1);margin-bottom:.2rem">Unfinished exam found</div>
+        <div style="font-size:.78rem;color:var(--t3);margin-bottom:1rem">${esc(snap.ch)} — ${answered}/${snap.qs.length} answered, ${fmt(adjustedLeft)} left on the clock. This was probably interrupted by a reload or a closed tab.</div>
+        <div style="display:flex;gap:.4rem">
+          <button id="exam-resume-btn" style="flex:1;padding:.62rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-weight:700;font-size:.85rem;cursor:pointer;font-family:var(--ff)">▶️ Resume</button>
+          <button id="exam-discard-btn" style="padding:.62rem .9rem;background:var(--b0);border:1px solid var(--b1);border-radius:var(--r2);color:var(--t2);font-size:.83rem;cursor:pointer;font-family:var(--ff)">Discard</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('exam-resume-btn').onclick = ()=>{
+      modal.remove();
+      QUIZ._resumeSnapshot(snap, adjustedLeft);
+    };
+    document.getElementById('exam-discard-btn').onclick = ()=>{
+      modal.remove();
+      QUIZ._clearExamSnapshot();
+    };
+  },
+  _resumeSnapshot(snap, adjustedLeft){
+    S.quiz = {
+      qs: snap.qs, ans: snap.ans, mode:'exam', idx:0, timer:null, elapsed:0,
+      left: adjustedLeft, active:true, ch: snap.ch, skipped:new Set(), shown:new Set()
+    };
+    document.getElementById('quiz-wrap').style.display='';
+    document.querySelectorAll('.view').forEach(e=>e.classList.remove('on'));
+    document.getElementById('fc-wrap').style.display='none';
+    document.getElementById('ex-wrap').style.display='';
+    document.getElementById('res-wrap').style.display='none';
+    QUIZ._renderExam();
+    QUIZ._startTimer();
+    toast('▶️ Exam resumed');
+  },
 
   quit(){
     QUIZ._exitGuard(()=>{ UI._goRaw('home'); });
@@ -1034,6 +1352,7 @@ const QUIZ = {
     document.getElementById('qem-quit').onclick = ()=>{
       close();
       QUIZ._stopTimer();
+      if(isExam) QUIZ._clearExamSnapshot();
       S.quiz.active = false;
       document.getElementById('quiz-wrap').style.display = 'none';
       if(afterQuit) afterQuit();
@@ -1069,13 +1388,20 @@ const QUIZ = {
       const optsEl = document.getElementById('fc-opts');
       optsEl.innerHTML = q.options.map((opt,i)=>{
         let cls='eo';
+        let isSelected = false;
         if(answered){
           const isCorrect = isOk(i, q.correct);
-          const isSelected = i===ansIdx;
+          isSelected = i===ansIdx;
           if(isCorrect) cls += ' shc';
           else if(isSelected) cls += ' bad2';
         }
-        return `<div class="${cls}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}" style="${answered?'cursor:default;pointer-events:none':''}">
+        // Options were plain <div onclick> before — invisible to keyboard
+        // navigation and announced as nothing in particular by a screen
+        // reader. role="button" + tabindex + the Enter/Space handler make
+        // them behave like real buttons without touching the CSS; the
+        // existing A/B/C/D and 1-5 keyboard shortcuts already covered
+        // sighted keyboard users, but not Tab-based or screen-reader nav.
+        return `<div class="${cls}" role="button" tabindex="${answered?-1:0}" aria-pressed="${isSelected}" aria-label="Option ${String.fromCharCode(65+i)}: ${esc(opt)}${isSelected?', selected':''}" onclick="${answered?'':'QUIZ.fcAnswer('+i+')'}" onkeydown="if((event.key==='Enter'||event.key===' ')&&!${answered}){event.preventDefault();QUIZ.fcAnswer(${i})}" style="${answered?'cursor:default;pointer-events:none':''}">
           <div class="ok">${String.fromCharCode(65+i)}</div><div>${esc(opt)}</div>
         </div>`;
       }).join('');
@@ -1151,39 +1477,50 @@ const QUIZ = {
   /* ── EXAM MODE ── */
   _renderExam(){
     document.getElementById('ex-chip').textContent = '📝 ' + S.quiz.ch;
-    document.getElementById('ex-ctr').textContent = `0/${S.quiz.qs.length}`;
     document.getElementById('ex-tmr').textContent = fmt(S.quiz.left);
     const el = document.getElementById('ex-qs');
     el.innerHTML = S.quiz.qs.map((q,qi)=>{
       const gq = encodeURIComponent(q.q.slice(0,120));
+      const savedAns = S.quiz.ans[qi]; // non-null when resuming a crashed/reloaded exam — see QUIZ._resumeSnapshot
       return `
-      <div class="eqc" id="eqc-${qi}">
+      <div class="eqc${savedAns!==null?' answered':''}" id="eqc-${qi}">
         <div class="qm"><span class="qn mono">Q${qi+1}</span><a class="ib" href="https://www.google.com/search?q=${gq}" target="_blank" rel="noopener" title="Search on Google" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px">🔍</a></div>
         <div class="qt" style="font-size:.85rem">${esc(q.q)}</div>
-        ${q.options.map((opt,oi)=>`
-          <div class="eo" onclick="QUIZ.exAnswer(${qi},${oi})" id="eo-${qi}-${oi}">
+        ${q.options.map((opt,oi)=>{
+          const sel = savedAns===oi;
+          return `<div class="eo${sel?' sel':''}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="Option ${String.fromCharCode(65+oi)}: ${esc(opt)}" onclick="QUIZ.exAnswer(${qi},${oi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();QUIZ.exAnswer(${qi},${oi})}" id="eo-${qi}-${oi}">
             <div class="ok">${String.fromCharCode(65+oi)}</div><div>${esc(opt)}</div>
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
       </div>
     `}).join('');
     renderMath(el);
+    const answeredCount = S.quiz.ans.filter(a=>a!==null).length;
+    document.getElementById('ex-ctr').textContent = `${answeredCount}/${S.quiz.qs.length}`;
+    document.getElementById('ex-ans').textContent = answeredCount;
+    document.getElementById('ex-pf').style.width = `${(answeredCount/S.quiz.qs.length)*100}%`;
   },
   exAnswer(qi, oi){
     if(!S.quiz.active)return;
     S.quiz.ans[qi]=oi;
-    document.querySelectorAll(`#eqc-${qi} .eo`).forEach((e,i)=>e.classList.toggle('sel', i===oi));
+    document.querySelectorAll(`#eqc-${qi} .eo`).forEach((e,i)=>{
+      const sel = i===oi;
+      e.classList.toggle('sel', sel);
+      e.setAttribute('aria-pressed', String(sel));
+    });
     document.getElementById(`eqc-${qi}`).classList.add('answered');
     const answered = S.quiz.ans.filter(a=>a!==null).length;
     document.getElementById('ex-ctr').textContent = `${answered}/${S.quiz.qs.length}`;
     document.getElementById('ex-ans').textContent = answered;
     document.getElementById('ex-pf').style.width = `${(answered/S.quiz.qs.length)*100}%`;
+    QUIZ._snapshotExam();
   },
   submitExam(){
     if(!S.quiz.active)return;
     const unanswered = S.quiz.ans.filter(a=>a===null).length;
     if(unanswered>0 && S.quiz.left>0 && !confirm(`${unanswered} question(s) unanswered. Submit anyway?`))return;
     QUIZ._stopTimer();
+    QUIZ._clearExamSnapshot();
     S.quiz.active=false;
     STREAK.markToday();
     S.quiz.qs.forEach((q,qi)=>{
@@ -1608,14 +1945,10 @@ const TT = {
 
 /* ═══════════════ 10e. OFFLINE CACHE ═══════════════ */
 const CACHE = {
-  render(){
+  async render(){
     const refs = ChapterData.allFileRefs();
-    function _isCached(key){
-      const v = _load(LS.QC+key, null);
-      if(!v) return false;
-      if(typeof v === 'object' && !Array.isArray(v) && v.success === false) return false;
-      return true;
-    }
+    const cachedKeys = new Set(await QDB.keys()); // one batch read instead of one per ref
+    function _isCached(key){ return cachedKeys.has(key); }
     let cachedCount=0;
     refs.forEach(r=>{ if(_isCached(r.key)) cachedCount++; });
     const tag=document.getElementById('cache-tag');
@@ -1657,23 +1990,22 @@ const CACHE = {
     toast(failed>0 ? `⚠️ ${ok}/${refs.length} cached — ${failed} failed` : '✅ Offline cache complete');
     CACHE.render();
   },
-  clr(){
+  async clr(){
     if(!confirm('Clear all cached question data? You will need internet to reload it.'))return;
-    Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>localStorage.removeItem(k));
+    await QDB.clear();
     toast('🗑 Cache cleared');
     CACHE.render();
   },
-  purgeStale(){
+  async purgeStale(){
     let purged = 0;
-    Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>{
-      try{
-        const v = JSON.parse(localStorage.getItem(k));
-        if(v && typeof v === 'object' && !Array.isArray(v) && v.success === false){
-          localStorage.removeItem(k);
-          purged++;
-        }
-      }catch{}
-    });
+    const keys = await QDB.keys();
+    for(const k of keys){
+      const v = await QDB.get(k);
+      if(v && typeof v === 'object' && !Array.isArray(v) && v.success === false){
+        await QDB.del(k);
+        purged++;
+      }
+    }
     if(purged > 0){ toast(`🧹 Removed ${purged} stale error cache entry${purged>1?'s':''}`); CACHE.render(); }
     else toast('✅ No stale cache entries found');
   },
@@ -1685,11 +2017,8 @@ const CACHE = {
   // every time, and without ever blocking the UI.
   async autoSync(){
     if(!S.online || S.forcedOffline) return;
-    function isCached(key){
-      const v = _load(LS.QC+key, null);
-      return v && !(typeof v==='object' && !Array.isArray(v) && v.success===false);
-    }
-    const missing = ChapterData.allFileRefs().filter(r=>!isCached(r.key));
+    const cachedKeys = new Set(await QDB.keys());
+    const missing = ChapterData.allFileRefs().filter(r=>!cachedKeys.has(r.key));
     if(!missing.length) return;
     CACHE._badge(`📦 Syncing 0/${missing.length}…`);
     let done=0;
@@ -1717,6 +2046,17 @@ const CACHE = {
 
 /* ═══════════════ 10f. DATA MANAGEMENT ═══════════════ */
 const DATA = {
+  async syncNow(){
+    if(!S.online){ toast('❌ Need internet to back up'); return; }
+    PSYNC._setStatus('Backing up…');
+    await PSYNC.pushNow();
+  },
+  async restoreCloud(){
+    if(!S.online){ toast('❌ Need internet to restore'); return; }
+    if(!confirm('Replace progress, bookmarks, flags, and wrong-answer bank on THIS device with your last cloud backup? This cannot be undone.')) return;
+    PSYNC._setStatus('Restoring…');
+    await PSYNC.forceRestore();
+  },
   exp(){
     const payload = { prog:S.prog, bk:S.bk, fl:S.fl, wr:S.wr, tt:S.tt, stk:S.stk, exportedAt:new Date().toISOString() };
     const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
@@ -1745,9 +2085,9 @@ const DATA = {
     };
     inp.click();
   },
-  clearQ(){
+  async clearQ(){
     if(!confirm('Clear cached question downloads? Your progress/bookmarks stay intact.'))return;
-    Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>localStorage.removeItem(k));
+    await QDB.clear();
     toast('🧹 Question cache cleared');
   },
   reset(){
@@ -1908,20 +2248,28 @@ const TUTORIAL = {
 };
 
 const APP = {
-  init(){
+  async init(){
     if(_load('ha_theme','dark')==='light') document.body.classList.add('light');
-    Object.keys(localStorage).filter(k=>k.startsWith(LS.QC)).forEach(k=>{
+    const verEl = document.getElementById('sb-version');
+    if(verEl) verEl.textContent = `HAMRO AFNAI v${APP_VERSION}`;
+    // One-time upgrade for anyone who already has sets cached under the
+    // old localStorage scheme — copies them into IndexedDB, then this
+    // becomes a no-op on every later boot. See QDB's migrateFromLocalStorage.
+    await QDB.migrateFromLocalStorage();
+    const qKeys = await QDB.keys();
+    for(const k of qKeys){
       try{
-        const v=JSON.parse(localStorage.getItem(k));
-        if(v && typeof v==='object' && !Array.isArray(v) && v.success===false) localStorage.removeItem(k);
+        const v = await QDB.get(k);
+        if(v && typeof v==='object' && !Array.isArray(v) && v.success===false) await QDB.del(k);
       }catch{}
-    });
+    }
     UI.go('home');
     CACHE.render();
     _updateNetBtn();
     _updateOfflineWarn();
     AUTH.startPeriodicRecheck();
     CACHE.autoSync();
+    QUIZ.checkResumableExam();
   }
 };
 

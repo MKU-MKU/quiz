@@ -71,7 +71,12 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
 /* Buttons */
 .btn{width:100%;padding:.85rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-size:.95rem;font-weight:700;font-family:var(--fd);cursor:pointer;transition:all var(--ease);box-shadow:0 4px 20px rgba(245,166,35,.3),inset 0 1px 0 rgba(255,255,255,.18);letter-spacing:.3px}
 .btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 28px rgba(245,166,35,.45)}
-.btn:active:not(:disabled){transform:none}
+.btn:active:not(:disabled){transform:scale(.97);box-shadow:0 2px 10px rgba(245,166,35,.35)}
+/* Keyboard-only focus ring — :focus-visible so mouse/touch clicks stay
+   clean; form inputs keep their own amber box-shadow (see .fld
+   input:focus above) on top of this for any focus, keyboard or not. */
+:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:4px}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn-sec{width:100%;padding:.7rem;background:transparent;border:1.5px solid rgba(255,255,255,.1);border-radius:var(--r2);color:var(--t2);font-size:.82rem;font-weight:600;font-family:var(--ff);cursor:pointer;transition:all var(--ease);margin-top:.55rem}
 .btn-sec:hover{border-color:var(--amb);color:var(--amb);background:rgba(245,166,35,.06)}
@@ -150,14 +155,14 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
     <button class="tab" onclick="APP.setMode('signup')">Create Account</button>
   </div>
 
-  <div class="err" id="err"></div>
+  <div class="err" id="err" role="alert" aria-live="assertive"></div>
 
   <!-- ═══════════════════════════════════════════════════════════════
        UNIFIED LOGIN — Single form routes to Admin OR User
        ═══════════════════════════════════════════════════════════════ -->
   <div id="form-login">
-    <div class="fld"><label>Username</label><input type="text" id="in-user" placeholder="Enter username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
-    <div class="fld"><label>Password</label><input type="password" id="in-pass" placeholder="Enter password" autocomplete="current-password"></div>
+    <div class="fld"><label for="in-user">Username</label><input type="text" id="in-user" placeholder="Enter username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+    <div class="fld"><label for="in-pass">Password</label><input type="password" id="in-pass" placeholder="Enter password" autocomplete="current-password"></div>
     <button class="btn" id="btn-login" onclick="APP.login()">Sign In →</button>
     <div class="link-row"><span>New here?</span><button onclick="APP.setMode('signup')">Create Account</button></div>
   </div>
@@ -165,14 +170,14 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
   <!-- SIGNUP FORM -->
   <div id="form-signup" style="display:none">
     <div class="fld-row">
-      <div class="fld"><label>Full Name</label><input type="text" id="su-name" placeholder="Your name"></div>
-      <div class="fld"><label>Mobile</label><input type="tel" id="su-mobile" placeholder="98XXXXXXXX"></div>
+      <div class="fld"><label for="su-name">Full Name</label><input type="text" id="su-name" placeholder="Your name"></div>
+      <div class="fld"><label for="su-mobile">Mobile</label><input type="tel" id="su-mobile" placeholder="98XXXXXXXX"></div>
     </div>
-    <div class="fld"><label>Email Address</label><input type="email" id="su-email" placeholder="you@example.com"></div>
-    <div class="fld"><label>Username</label><input type="text" id="su-user" placeholder="Choose username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
+    <div class="fld"><label for="su-email">Email Address</label><input type="email" id="su-email" placeholder="you@example.com"></div>
+    <div class="fld"><label for="su-user">Username</label><input type="text" id="su-user" placeholder="Choose username" autocomplete="username" autocapitalize="none" spellcheck="false"></div>
     <div class="fld-row">
-      <div class="fld"><label>Password</label><input type="password" id="su-pass" placeholder="Min 6 chars" autocomplete="new-password"></div>
-      <div class="fld"><label>Confirm</label><input type="password" id="su-cpass" placeholder="Repeat password" autocomplete="new-password"></div>
+      <div class="fld"><label for="su-pass">Password</label><input type="password" id="su-pass" placeholder="Min 6 chars" autocomplete="new-password"></div>
+      <div class="fld"><label for="su-cpass">Confirm</label><input type="password" id="su-cpass" placeholder="Repeat password" autocomplete="new-password"></div>
     </div>
     <button class="btn" id="btn-signup" onclick="APP.signup()">Create Account →</button>
     <div class="link-row"><span>Have an account?</span><button onclick="APP.setMode('login')">Sign In</button></div>
@@ -221,9 +226,9 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
       <div class="phone" id="pay-phone">📞 9863200285</div>
       <div class="inst" id="pay-inst">Scan the QR code and submit your transaction ID for verification.</div>
     </div>
-    <div class="fld"><label>Transaction ID (TXN ID)</label><input type="text" id="pay-txn" placeholder="e.g. TXN123456789"></div>
-    <div class="fld"><label>Remarks (optional)</label><input type="text" id="pay-rem" placeholder="Any note for admin…"></div>
-    <div class="fld"><label>Screenshot / Receipt</label><input type="file" id="pay-file" accept="image/*" onchange="APP.onFile()"></div>
+    <div class="fld"><label for="pay-txn">Transaction ID (TXN ID)</label><input type="text" id="pay-txn" placeholder="e.g. TXN123456789"></div>
+    <div class="fld"><label for="pay-rem">Remarks (optional)</label><input type="text" id="pay-rem" placeholder="Any note for admin…"></div>
+    <div class="fld"><label for="pay-file">Screenshot / Receipt</label><input type="file" id="pay-file" accept="image/*" onchange="APP.onFile()"></div>
     <button class="btn" id="btn-pay" onclick="APP.submitPayment()">Submit Payment →</button>
     <button class="btn-sec" onclick="APP.logout()">← Back to Login</button>
   </div>
@@ -239,11 +244,11 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script>
 /* ═════════════════════════════════════════════════════════════════════════════
-   HAMRO AFNAI v5.0 — UNIFIED GATEWAY
+   HAMRO AFNAI v10 — UNIFIED GATEWAY
    One login → Admin (admin.html) OR User (user.html)
    Session schema designed for online + offline validation in user.html
    ═════════════════════════════════════════════════════════════════════════════ */
@@ -261,7 +266,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbwAhfyQm7NvxaNjgRm3oC9S
      mobile: string,         // user only
      token: string,          // session token from backend
      access: {
-       level: "permanent" | "trial" | "pending" | "expired",
+       level: "permanent" | "trial" | "pending_review" | "expired" | "unknown",
        trialExpiresAt: "ISO date string", // if trial
        permanent: boolean
      },
@@ -282,7 +287,7 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbwAhfyQm7NvxaNjgRm3oC9S
    3. OFFLINE check:
       - if s.access.level === 'permanent' → ALLOW
       - if s.access.level === 'trial'  → check Date.now() < new Date(s.access.trialExpiresAt)
-      - if s.access.level === 'expired' or 'pending' → BLOCK, redirect to gateway
+      - if s.access.level === 'expired' or 'pending_review' or 'unknown' → BLOCK, redirect to gateway
    4. ONLINE check (background):
       - fetch(GAS_URL + '?action=checkSession&token=' + s.token)
       - Update s.access if server state changed.
@@ -558,11 +563,19 @@ const APP = {
      ═════════════════════════════════════════════════════════════════════════════ */
   handleUserAuth(res) {
     const user = res.user || {};
+    // needsPayment is true for BOTH "trial ran out, never paid" and
+    // "already submitted a payment, waiting on admin review" — the backend
+    // only sets user.status to 'payment_pending' for the second case (see
+    // handleLogin/checkSession in CODE.GS), so that's what tells them apart
+    // here. Previously both collapsed into 'expired' and a user who'd
+    // already paid saw the "please pay" screen again on every fresh login,
+    // with nothing telling them their submission was already in.
     const access = {
       level: res.permanentAccess || user.status === 'active' ? 'permanent'
              : res.isTrial ? 'trial'
+             : res.needsPayment && user.status === 'payment_pending' ? 'pending_review'
              : res.needsPayment ? 'expired'
-             : 'pending',
+             : 'unknown', // no permanentAccess/isTrial/needsPayment at all — an unrecognized account state, not a real "pending review"
       trialExpiresAt: res.trialExpiresAt || user.trialExpiresAt,
       permanent: !!(res.permanentAccess || user.status === 'active'),
       // "permanent" | "yearly" — cosmetic only; the backend (checkYearlyExpiry_)
@@ -596,9 +609,29 @@ const APP = {
       this.settings = res.settings || {};
       document.getElementById('pay-banner').style.display = 'block';
       this.setMode('payment'); // setMode itself now triggers an immediate loadPaymentUI()
+    } else if (access.level === 'pending_review') {
+      this.setMode('status');
+      this.loadPaymentStatus();
     } else {
       this.showErr(res.error || 'Account issue. Contact admin.');
     }
+  },
+
+  // Fills in the status card with the actual submitted TXN ID and date
+  // (via getPaymentStatus) instead of the generic static copy, so someone
+  // landing here after a fresh login can see this really is their earlier
+  // submission and not just the same "under review" placeholder every time.
+  async loadPaymentStatus() {
+    if (!this.session || !this.online) return;
+    try {
+      const res = await this.api('getPaymentStatus', { username: this.session.username, token: this.session.token });
+      if (res.success && res.payment) {
+        const p = res.payment;
+        const msgEl = document.getElementById('st-msg');
+        const when = p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '';
+        msgEl.textContent = `TXN ${p.txId} submitted${when ? ' on ' + when : ''} — waiting for admin verification. You'll get full access as soon as it's approved.`;
+      }
+    } catch (e) { /* keep the static default copy — non-critical */ }
   },
 
   async resumeUserSession(saved) {
@@ -627,8 +660,9 @@ const APP = {
       this.setMode('payment'); // setMode itself now triggers an immediate loadPaymentUI()
       return;
     }
-    if (saved.access && saved.access.level === 'pending') {
+    if (saved.access && saved.access.level === 'pending_review') {
       this.setMode('status');
+      if (this.online) this.loadPaymentStatus();
       return;
     }
 
@@ -809,8 +843,8 @@ const APP = {
 
     if (!res.success) return this.showErr(res.error || 'Submission failed.');
 
-    // Update session to pending
-    this.session.access.level = 'pending';
+    // Update session to pending_review
+    this.session.access.level = 'pending_review';
     this.saveSession(this.session);
 
     this.toast('✅ Payment submitted! Waiting for admin verification.');

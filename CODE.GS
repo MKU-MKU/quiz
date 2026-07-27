@@ -1,27 +1,77 @@
 /* ═══════════════════════════════════════════════════════════════
-   HAMRO AFNAI v4.0 FINAL — Complete Google Apps Script Backend
+   HAMRO AFNAI v10 — Complete Google Apps Script Backend
    Flow: Signup → Auto-Trial (24h) → Payment → Admin Verify → Permanent
    Admin login shares endpoint, opens separate admin world.
    Offline-first: Once paid, access never removed.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── ADMIN CREDENTIALS ───────────────────────────────────────── */
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD_DEFAULT = "ChangeMe123!";   // ⚠️ CHANGE THIS IMMEDIATELY (via admin.html's Change Password, or edit here before first deploy)
+/* ── VERSION ──────────────────────────────────────────────────────
+   Bump this on every release that ships to production, so a support
+   conversation can start with "what version are you on" instead of
+   guessing from symptoms. Surfaced via the `ping` action; mirrored in
+   app.js/index.html/user.html/admin.html/sw.js so every surface agrees. */
+const APP_VERSION = "10.0";
 
-// The admin password can be changed at runtime (see adminChangePassword),
-// so it can't live in a plain `const` — this reads the current value from
-// PropertiesService, falling back to the default above until it's changed.
-function getAdminPassword_() {
-  const stored = PropertiesService.getScriptProperties().getProperty("ADMIN_PASSWORD");
-  return stored || ADMIN_PASSWORD_DEFAULT;
-}
+/* ── ADMIN CREDENTIALS ───────────────────────────────────────────
+   Admins now live in their own sheet (see getAdminsSheet_ / ADMIN_HEADERS
+   below) instead of a single hardcoded username+password — any admin can
+   create more admin accounts from admin.html's Settings tab
+   (adminCreateAdmin), each with their own login and their own session
+   token, so logging in from a second device no longer kicks the first
+   one out. The two constants below are ONLY used once, to seed the very
+   first admin row the first time the Admins sheet is created. */
+const ADMIN_SEED_USERNAME = "admin";
+const ADMIN_SEED_PASSWORD = "ChangeMe123!";   // ⚠️ CHANGE THIS IMMEDIATELY after first login (Settings → Change Password), or add a new admin and delete this one.
 
 /* ── SHEET CONFIG ── */
 const USERS_SHEET     = "Users";
 const PAYMENTS_SHEET  = "Payments";
 const SETTINGS_SHEET  = "Settings";
 const LOGS_SHEET      = "Logs";
+const ADMINS_SHEET    = "Admins";
+const PROGRESS_SHEET  = "Progress";
+
+/* ── BRUTE-FORCE LOGIN PROTECTION ────────────────────────────────
+   Tracks failed attempts per-username in PropertiesService (not a sheet
+   column) so this works on an already-deployed Users/Admins sheet with
+   zero migration. 'user' and 'admin' are tracked as separate keyspaces
+   under the same username, since a person could plausibly share a
+   username across both worlds. Locked-out logins are rejected BEFORE the
+   password is checked, so a locked account can't keep being used to
+   guess — this applies to both handleLogin() and adminLogin(). */
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
+function loginLockKey_(kind, username) {
+  return "loginlock_" + kind + "_" + String(username).toLowerCase().trim();
+}
+
+function checkLoginLock_(kind, username) {
+  const raw = PropertiesService.getScriptProperties().getProperty(loginLockKey_(kind, username));
+  if (!raw) return { locked: false };
+  let state;
+  try { state = JSON.parse(raw); } catch (e) { return { locked: false }; }
+  if (state.lockUntil && Date.now() < state.lockUntil) {
+    return { locked: true, minutesLeft: Math.ceil((state.lockUntil - Date.now()) / 60000) };
+  }
+  return { locked: false };
+}
+
+function recordLoginFailure_(kind, username) {
+  const props = PropertiesService.getScriptProperties();
+  const key = loginLockKey_(kind, username);
+  let state = { count: 0 };
+  const raw = props.getProperty(key);
+  if (raw) { try { state = JSON.parse(raw); } catch (e) {} }
+  if (state.lockUntil && Date.now() >= state.lockUntil) state = { count: 0 }; // previous lockout expired — start fresh
+  state.count = (state.count || 0) + 1;
+  if (state.count >= MAX_LOGIN_ATTEMPTS) state.lockUntil = Date.now() + LOCKOUT_MINUTES * 60 * 1000;
+  props.setProperty(key, JSON.stringify(state));
+}
+
+function clearLoginLock_(kind, username) {
+  PropertiesService.getScriptProperties().deleteProperty(loginLockKey_(kind, username));
+}
 
 const USER_HEADERS = [
   "username", "passHash", "name", "email", "mobile",
@@ -37,6 +87,21 @@ const PAYMENT_HEADERS = [
 
 const SETTINGS_HEADERS = ["key", "value"];
 const LOG_HEADERS = ["timestamp", "admin", "action", "target", "details"];
+
+// token/tokenExpires mirror the pattern USER_HEADERS already uses for
+// per-user session tokens (see issueUserToken_) — each admin gets their
+// own row and their own token, so admin sessions no longer collide.
+const ADMIN_HEADERS = [
+  "username", "passHash", "createdAt", "createdBy", "token", "tokenExpires"
+];
+
+// A DELIBERATELY separate sheet from Users, not new columns on it — that
+// way this ships with zero migration risk to anyone's already-deployed
+// Users sheet. `data` is one JSON blob (prog/bk/fl/wr/stk — the same
+// shape app.js already keeps in localStorage) rather than one column per
+// field, since the client-side shape is expected to keep evolving and a
+// blob means adding a new tracked field never needs a new column here.
+const PROGRESS_HEADERS = ["username", "data", "updatedAt"];
 
 const TRIAL_HOURS = 24;
 
@@ -64,12 +129,14 @@ function doGet(e) {
   try {
     switch (action) {
       // ── HEALTH CHECK ──
-      case "ping":                result = { success: true, pong: true }; break;
+      case "ping":                result = { success: true, pong: true, version: APP_VERSION }; break;
 
       // ── AUTH ──
       case "login":              result = handleLogin(e.parameter); break;
       case "signup":             result = handleSignup(e.parameter); break;
       case "checksession":       result = checkSession(e.parameter); break;
+      case "saveprogress":       result = saveProgress(e.parameter); break;
+      case "getprogress":        result = getProgress(e.parameter); break;
 
       // ── PAYMENT ──
       case "submitpayment":      result = submitPayment(e.parameter); break;
@@ -80,6 +147,9 @@ function doGet(e) {
       // ── ADMIN WORLD ──
       case "adminlogin":         result = adminLogin(e.parameter); break;
       case "adminchangepassword": result = adminChangePassword(e.parameter); break;
+      case "adminlistadmins":    result = adminListAdmins(e.parameter); break;
+      case "admincreateadmin":   result = adminCreateAdmin(e.parameter); break;
+      case "admindeleteadmin":   result = adminDeleteAdmin(e.parameter); break;
       case "adminlistusers":     result = adminListUsers(e.parameter); break;
       case "adminlistpayments":  result = adminListPayments(e.parameter); break;
       case "adminreviewpayment": result = adminReviewPayment(e.parameter); break;
@@ -95,7 +165,7 @@ function doGet(e) {
       default:
         result = {
           success: false,
-          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListUsers, adminListPayments, adminReviewPayment, adminGrantAccess, adminUpdateUser, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
+          error: "Unknown action: '" + action + "'. Valid: ping, login, signup, checkSession, saveProgress, getProgress, submitPayment, getPaymentStatus, getSettings, getFile, adminLogin, adminChangePassword, adminListAdmins, adminCreateAdmin, adminDeleteAdmin, adminListUsers, adminListPayments, adminReviewPayment, adminGrantAccess, adminUpdateUser, adminDeleteUser, adminDeletePayment, adminUpdateSettings, adminUpdateSettingsBatch, adminStats, adminListLogs"
         };
     }
   } catch (err) {
@@ -137,6 +207,8 @@ function setup() {
   getPaymentsSheet_();
   getSettingsSheet_();
   getLogsSheet_(); // was missing here — previously only got created lazily on the first admin action, so a fresh setup() run left the Logs tab absent until then.
+  getAdminsSheet_(); // seeds the first admin login (see ADMIN_SEED_USERNAME/PASSWORD above)
+  getProgressSheet_();
   initDefaultSettings_();
   // Idempotent — guarantees every sheet has the correct text-formatting
   // and column widths whether it was just created above or already
@@ -159,7 +231,7 @@ function getSpreadsheet_() {
     }
   }
   if (!spreadsheet) {
-    spreadsheet = SpreadsheetApp.create("HAMRO AFNAI v4.0");
+    spreadsheet = SpreadsheetApp.create("HAMRO AFNAI v10");
     PropertiesService.getScriptProperties().setProperty("SHEET_ID", spreadsheet.getId());
   }
   return spreadsheet;
@@ -271,6 +343,97 @@ function getLogsSheet_() {
   return sheet;
 }
 
+// Creates the Admins sheet on first use and seeds it with exactly one
+// account (ADMIN_SEED_USERNAME/PASSWORD) so there's always at least one
+// way in on a fresh deploy. Every admin after that is created via
+// adminCreateAdmin (admin.html → Settings → Admin Accounts), each with
+// their own hashed password and their own session token/expiry columns
+// — see ADMIN_HEADERS. Existing sheets are left alone (idempotent).
+function getAdminsSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(ADMINS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(ADMINS_SHEET);
+    sheet.appendRow(ADMIN_HEADERS);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, ADMIN_HEADERS.length)
+      .setFontWeight("bold")
+      .setBackground("#ea4335")
+      .setFontColor("white");
+    const maxRows = sheet.getMaxRows() - 1;
+    sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
+    autoResizeCapped_(sheet, 1, ADMIN_HEADERS.length, 300);
+
+    const salt = makeSalt_();
+    sheet.appendRow([
+      ADMIN_SEED_USERNAME,
+      salt + ":" + hashPassSalted_(ADMIN_SEED_PASSWORD, salt),
+      new Date().toISOString(),
+      "system",
+      "",
+      ""
+    ]);
+  }
+  return sheet;
+}
+
+function findAdminRow_(sheet, username) {
+  if (!username) return null;
+  const data = sheet.getDataRange().getValues();
+  const target = String(username).toLowerCase().trim();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase().trim() === target) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
+// Token is column 5, expiry is column 6 (0-indexed 4/5) per ADMIN_HEADERS.
+function findAdminByToken_(sheet, token) {
+  if (!token) return null;
+  const data = sheet.getDataRange().getValues();
+  const now = Date.now();
+  for (let i = 1; i < data.length; i++) {
+    const storedToken = data[i][4];
+    const expires = Number(data[i][5] || 0);
+    if (storedToken && storedToken === token && expires && now <= expires) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
+function getProgressSheet_() {
+  const spreadsheet = getSpreadsheet_();
+  let sheet = spreadsheet.getSheetByName(PROGRESS_SHEET);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(PROGRESS_SHEET);
+    sheet.appendRow(PROGRESS_HEADERS);
+    sheet.setFrozenRows(1);
+    sheet.getRange(1, 1, 1, PROGRESS_HEADERS.length)
+      .setFontWeight("bold")
+      .setBackground("#0f9d58")
+      .setFontColor("white");
+    const maxRows = sheet.getMaxRows() - 1;
+    sheet.getRange(2, 1, maxRows, 1).setNumberFormat("@"); // username, same all-digits protection as Users
+    autoResizeCapped_(sheet, 1, PROGRESS_HEADERS.length, 300);
+  }
+  return sheet;
+}
+
+function findProgressRow_(sheet, username) {
+  if (!username) return null;
+  const data = sheet.getDataRange().getValues();
+  const target = String(username).toLowerCase().trim();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).toLowerCase().trim() === target) {
+      return { rowIndex: i + 1, row: data[i] };
+    }
+  }
+  return null;
+}
+
 
 // Records one row per admin action. admin.html's "Activity Logs" tab
 // (LOGS module) has always called action=adminListLogs to read this, but
@@ -280,7 +443,7 @@ function getLogsSheet_() {
 // action itself.
 function logAction_(admin, action, target, details) {
   try {
-    getLogsSheet_().appendRow([new Date().toISOString(), admin || ADMIN_USERNAME, action || "", target || "", details || ""]);
+    getLogsSheet_().appendRow([new Date().toISOString(), admin || "admin", action || "", target || "", details || ""]);
   } catch (err) {
     console.error("logAction_ failed:", err);
   }
@@ -446,25 +609,36 @@ function rowToUser_(row) {
   };
 }
 
+// Returns the acting admin's username on success (truthy string — use
+// this in logAction_ so the Activity Log shows who really did what now
+// that there's more than one admin), or null on failure. Every
+// admin-mutating action does `const actor = checkAdmin_(p); if (!actor) ...`
+// instead of a bare true/false check.
 function checkAdmin_(p) {
-  if (p.adminUser === ADMIN_USERNAME && p.adminPass === getAdminPassword_()) return true;
-  if (!p.adminToken) return false;
-  const props = PropertiesService.getScriptProperties();
-  const storedToken = props.getProperty("ADMIN_TOKEN");
-  const expiresAt = Number(props.getProperty("ADMIN_TOKEN_EXPIRES") || 0);
-  if (!storedToken || p.adminToken !== storedToken) return false;
-  if (Date.now() > expiresAt) return false;
-  return true;
+  const sheet = getAdminsSheet_();
+  if (p.adminUser && p.adminPass) {
+    const found = findAdminRow_(sheet, p.adminUser);
+    if (!found) return null;
+    const verify = verifyPassword_(p.adminPass, found.row[1]);
+    if (!verify.ok) return null;
+    if (verify.upgradedHash) sheet.getRange(found.rowIndex, 2).setValue(verify.upgradedHash);
+    return found.row[0];
+  }
+  if (!p.adminToken) return null;
+  const found = findAdminByToken_(sheet, p.adminToken);
+  return found ? found.row[0] : null;
 }
 
-// Persists the token adminLogin() just issued so checkAdmin_() can validate
-// it on every later request. 24h lifetime matches admin.html's own
-// client-side `expires: Date.now() + 86400000` used for the localStorage
-// session — keep both in sync if either changes.
-function issueAdminToken_(token) {
-  const props = PropertiesService.getScriptProperties();
-  props.setProperty("ADMIN_TOKEN", token);
-  props.setProperty("ADMIN_TOKEN_EXPIRES", String(Date.now() + 24 * 60 * 60 * 1000));
+// Issues a token scoped to ONE admin's row (24h lifetime, matching
+// admin.html's own client-side `expires: Date.now() + 86400000`) instead
+// of a single script-wide token — so a second admin (or the same admin on
+// a second device) logging in no longer invalidates anyone else's session.
+function issueAdminToken_(sheet, rowIndex) {
+  const token = Utilities.getUuid();
+  const expires = Date.now() + 24 * 60 * 60 * 1000;
+  sheet.getRange(rowIndex, 5).setValue(token);
+  sheet.getRange(rowIndex, 6).setValue(String(expires));
+  return token;
 }
 
 // A "yearly" grant is stored as permanentAccess=true + accessType="yearly"
@@ -503,14 +677,32 @@ function handleLogin(p) {
   }
 
   // ── ADMIN WORLD ──
-  if (username === ADMIN_USERNAME && password === getAdminPassword_()) {
-    return {
-      success: true,
-      isAdmin: true,
-      adminToken: hashPass_(ADMIN_USERNAME + getAdminPassword_() + new Date().getTime()),
-      user: { username: ADMIN_USERNAME, name: "Administrator", role: "admin" },
-      message: "Welcome to Admin World"
-    };
+  // Checked against the Admins sheet now (any admin, not just one
+  // hardcoded username). Note: admin.html doesn't trust this response for
+  // sign-in anyway — it always re-authenticates independently (see
+  // index.html's goAdmin()) — but the token is now real/valid either way,
+  // where before it was silently never persisted.
+  const adminSheet = getAdminsSheet_();
+  const adminFound = findAdminRow_(adminSheet, username);
+  if (adminFound) {
+    const adminLock = checkLoginLock_('admin', username);
+    if (adminLock.locked) {
+      return { success: false, error: `Too many failed attempts. Try again in ${adminLock.minutesLeft} minute(s).` };
+    }
+    const adminVerify = verifyPassword_(password, adminFound.row[1]);
+    if (adminVerify.ok) {
+      clearLoginLock_('admin', username);
+      if (adminVerify.upgradedHash) adminSheet.getRange(adminFound.rowIndex, 2).setValue(adminVerify.upgradedHash);
+      const adminToken = issueAdminToken_(adminSheet, adminFound.rowIndex);
+      return {
+        success: true,
+        isAdmin: true,
+        adminToken: adminToken,
+        user: { username: adminFound.row[0], name: "Administrator", role: "admin" },
+        message: "Welcome to Admin World"
+      };
+    }
+    recordLoginFailure_('admin', username);
   }
 
   // ── USER WORLD ──
@@ -520,12 +712,19 @@ function handleLogin(p) {
     return { success: false, error: "No account found. Please sign up first." };
   }
 
+  const userLock = checkLoginLock_('user', username);
+  if (userLock.locked) {
+    return { success: false, error: `Too many failed attempts. Try again in ${userLock.minutesLeft} minute(s).` };
+  }
+
   const row = found.row;
   const storedHash = row[1];
   const verify = verifyPassword_(password, storedHash);
   if (!verify.ok) {
+    recordLoginFailure_('user', username);
     return { success: false, error: "Wrong password." };
   }
+  clearLoginLock_('user', username);
   if (verify.upgradedHash) {
     sheet.getRange(found.rowIndex, 2).setValue(verify.upgradedHash);
   }
@@ -616,58 +815,95 @@ function handleSignup(p) {
   if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
     return { success: false, error: "Username must be 3-30 characters: letters, numbers, dots, dashes, underscores only." };
   }
-  if (password.length < 4) {
-    return { success: false, error: "Password must be at least 4 characters." };
+  // index.html's signup form already enforces (and its placeholder
+  // promises) a 6-character minimum client-side — this used to say 4
+  // here, so anyone signing up through the API directly (or a modified
+  // client) could set a password weaker than what the UI claims to
+  // require. Matches adminChangePassword/adminCreateAdmin's own 6-char
+  // floor too.
+  if (password.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters." };
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { success: false, error: "Invalid email address." };
   }
-
-  const sheet = getUsersSheet_();
-  if (findUserRow_(sheet, username)) {
-    return { success: false, error: "Username already taken." };
+  // Nepali mobile numbers: 10 digits starting with 98/97/96/99 (covers
+  // NTC, Ncell, and Smart Cell) — matches index.html's own client-side
+  // check exactly (see APP.signup()) so a request that gets past the UI
+  // can't fail here with a different rule, and vice versa. Nothing
+  // validated this server-side before, so a typo'd or garbled mobile
+  // number could get stored as-is — and mobile doubles as a dedup key
+  // (findUserByField_) and the fallback contact method admins use to
+  // reach a student about their payment, so a malformed one silently
+  // breaks both.
+  if (!/^(98|97|96|99)\d{8}$/.test(mobile)) {
+    return { success: false, error: "Invalid Nepali mobile number. Use 10 digits starting with 98/97/96/99." };
   }
-  // email is column 3, mobile is column 4 in USER_HEADERS — see
-  // findUserByField_ above for why this check exists.
-  if (findUserByField_(sheet, 3, email)) {
-    return { success: false, error: "An account with this email already exists. Please log in instead." };
+
+  // The uniqueness checks below and the appendRow() that follows are a
+  // classic check-then-write race: two signups for the same username
+  // (or email/mobile) arriving within the same script execution window
+  // could both pass "not taken" and both get written, silently breaking
+  // the dedup guarantees findUserByField_ exists for in the first place.
+  // A script-wide lock serializes signups so that can't happen — the
+  // small wait cost only affects the rare case of two people signing up
+  // in the same instant, not normal traffic.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "Server is busy, please try signing up again in a moment." };
   }
-  if (findUserByField_(sheet, 4, mobile)) {
-    return { success: false, error: "An account with this mobile number already exists. Please log in instead." };
+
+  try {
+    const sheet = getUsersSheet_();
+    if (findUserRow_(sheet, username)) {
+      return { success: false, error: "Username already taken." };
+    }
+    // email is column 3, mobile is column 4 in USER_HEADERS — see
+    // findUserByField_ above for why this check exists.
+    if (findUserByField_(sheet, 3, email)) {
+      return { success: false, error: "An account with this email already exists. Please log in instead." };
+    }
+    if (findUserByField_(sheet, 4, mobile)) {
+      return { success: false, error: "An account with this mobile number already exists. Please log in instead." };
+    }
+
+    const now = new Date();
+    const trialHours = Number(getSettingValue_("trialHours", TRIAL_HOURS)) || TRIAL_HOURS;
+    const trialExpiresAt = new Date(now.getTime() + trialHours * 60 * 60 * 1000);
+    const salt = makeSalt_();
+
+    sheet.appendRow([
+      username,
+      salt + ":" + hashPassSalted_(password, salt),
+      name,
+      email,
+      mobile,
+      contact,
+      contactType,
+      "trial",              // status
+      now.toISOString(),    // createdAt
+      now.toISOString(),    // approvedAt
+      "user",               // role
+      trialExpiresAt.toISOString(), // trialExpiresAt
+      "none",               // paymentStatus
+      "false"               // permanentAccess
+    ]);
+
+    const newRowIndex = sheet.getLastRow();
+    const sessionToken = issueUserToken_(sheet, newRowIndex);
+
+    return {
+      success: true,
+      isTrial: true,
+      token: sessionToken,
+      trialExpiresAt: trialExpiresAt.toISOString(),
+      message: "Account created! You got 1-day free trial. Pay to get long-term access."
+    };
+  } finally {
+    lock.releaseLock();
   }
-
-  const now = new Date();
-  const trialHours = Number(getSettingValue_("trialHours", TRIAL_HOURS)) || TRIAL_HOURS;
-  const trialExpiresAt = new Date(now.getTime() + trialHours * 60 * 60 * 1000);
-  const salt = makeSalt_();
-
-  sheet.appendRow([
-    username,
-    salt + ":" + hashPassSalted_(password, salt),
-    name,
-    email,
-    mobile,
-    contact,
-    contactType,
-    "trial",              // status
-    now.toISOString(),    // createdAt
-    now.toISOString(),    // approvedAt
-    "user",               // role
-    trialExpiresAt.toISOString(), // trialExpiresAt
-    "none",               // paymentStatus
-    "false"               // permanentAccess
-  ]);
-
-  const newRowIndex = sheet.getLastRow();
-  const sessionToken = issueUserToken_(sheet, newRowIndex);
-
-  return {
-    success: true,
-    isTrial: true,
-    token: sessionToken,
-    trialExpiresAt: trialExpiresAt.toISOString(),
-    message: "Account created! You got 1-day free trial. Pay to get long-term access."
-  };
 }
 
 function checkSession(p) {
@@ -723,6 +959,77 @@ function checkSession(p) {
   }
 
   return { success: true, user: user };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PROGRESS SYNC — prog/bk/fl/wr/stk, mirrored from localStorage
+   ═══════════════════════════════════════════════════════════════ */
+
+// Saves the caller's own study progress (prog/bk/fl/wr/stk — the same
+// shape app.js already keeps in localStorage) to a per-user row here, so
+// it survives a lost device, a cleared browser, or a switch to a new
+// phone instead of being local-only. Identity is proven the same way
+// checkSession proves it — a valid session token — so this can never let
+// one user overwrite another's progress.
+function saveProgress(p) {
+  const username = String(p.username || "").trim();
+  if (!username) return { success: false, error: "Username required." };
+  const userSheet = getUsersSheet_();
+  const userFound = findUserRow_(userSheet, username);
+  if (!userFound) return { success: false, error: "User not found." };
+  if (!verifyUserToken_(userFound, p.token)) {
+    return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+  }
+
+  const dataStr = String(p.data || "");
+  if (!dataStr) return { success: false, error: "No data provided." };
+  // Sheets caps a single cell at 50,000 characters — stay comfortably
+  // under that so a save never silently truncates.
+  if (dataStr.length > 45000) {
+    return { success: false, error: "Progress data too large to sync." };
+  }
+  try { JSON.parse(dataStr); } catch (e) {
+    return { success: false, error: "Malformed progress data." };
+  }
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "Server is busy, please try again in a moment." };
+  }
+  try {
+    const sheet = getProgressSheet_();
+    const found = findProgressRow_(sheet, username);
+    const now = new Date().toISOString();
+    if (found) {
+      sheet.getRange(found.rowIndex, 2, 1, 2).setValues([[dataStr, now]]);
+    } else {
+      sheet.appendRow([username, dataStr, now]);
+    }
+    return { success: true, updatedAt: now };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Returns the caller's own synced progress blob, or data:null if they've
+// never synced from any device (brand new account, or an existing one
+// that pre-dates this feature) — the client treats null as "nothing to
+// merge" and just keeps using whatever's already in its own localStorage.
+function getProgress(p) {
+  const username = String(p.username || "").trim();
+  if (!username) return { success: false, error: "Username required." };
+  const userSheet = getUsersSheet_();
+  const userFound = findUserRow_(userSheet, username);
+  if (!userFound) return { success: false, error: "User not found." };
+  if (!verifyUserToken_(userFound, p.token)) {
+    return { success: false, error: "Session expired. Please log in again.", sessionInvalid: true };
+  }
+  const sheet = getProgressSheet_();
+  const found = findProgressRow_(sheet, username);
+  if (!found) return { success: true, data: null };
+  return { success: true, data: found.row[1], updatedAt: found.row[2] };
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -920,37 +1227,128 @@ function handleGetFile(p) {
 function adminLogin(p) {
   const username = String(p.username || "").trim();
   const password = p.password || "";
-  if (username === ADMIN_USERNAME && password === getAdminPassword_()) {
-    const token = hashPass_(ADMIN_USERNAME + getAdminPassword_() + new Date().getTime());
-    issueAdminToken_(token);
-    logAction_(ADMIN_USERNAME, "Admin Login", "", "");
-    return {
-      success: true,
-      isAdmin: true,
-      adminToken: token,
-      user: { username: username, name: "Administrator", role: "admin" },
-      message: "Welcome to Admin World"
-    };
+  if (!username || !password) return { success: false, error: "Enter admin username and password." };
+
+  const sheet = getAdminsSheet_();
+  const found = findAdminRow_(sheet, username);
+  if (!found) return { success: false, error: "Invalid admin credentials." };
+
+  const lock = checkLoginLock_('admin', username);
+  if (lock.locked) {
+    return { success: false, error: `Too many failed attempts. Try again in ${lock.minutesLeft} minute(s).` };
   }
-  return { success: false, error: "Invalid admin credentials." };
+
+  const verify = verifyPassword_(password, found.row[1]);
+  if (!verify.ok) {
+    recordLoginFailure_('admin', username);
+    return { success: false, error: "Invalid admin credentials." };
+  }
+  clearLoginLock_('admin', username);
+  if (verify.upgradedHash) sheet.getRange(found.rowIndex, 2).setValue(verify.upgradedHash);
+
+  const token = issueAdminToken_(sheet, found.rowIndex);
+  logAction_(found.row[0], "Admin Login", "", "");
+  return {
+    success: true,
+    isAdmin: true,
+    adminToken: token,
+    user: { username: found.row[0], name: "Administrator", role: "admin" },
+    message: "Welcome to Admin World"
+  };
 }
 
-// admin.html calls this then forces re-login (the old adminToken stays
-// valid until it naturally expires — 24h — since it's independent of the
-// password; that's an acceptable tradeoff for a single-admin panel).
+// Changes the CALLING admin's own password (their row is found via their
+// adminToken, resolved through checkAdmin_) — not a single shared secret
+// anymore, so this only ever affects the account that's actually logged
+// in, never any other admin.
 function adminChangePassword(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
   const currentPassword = p.currentPassword || "";
   const newPassword = p.newPassword || "";
-  if (currentPassword !== getAdminPassword_()) {
-    return { success: false, error: "Current password is incorrect." };
-  }
   if (!newPassword || newPassword.length < 6) {
     return { success: false, error: "New password must be at least 6 characters." };
   }
-  PropertiesService.getScriptProperties().setProperty("ADMIN_PASSWORD", newPassword);
-  logAction_(ADMIN_USERNAME, "Change Admin Password", "", "");
+  const sheet = getAdminsSheet_();
+  const found = findAdminRow_(sheet, actor);
+  if (!found) return { success: false, error: "Admin account not found." };
+  const verify = verifyPassword_(currentPassword, found.row[1]);
+  if (!verify.ok) return { success: false, error: "Current password is incorrect." };
+
+  const salt = makeSalt_();
+  sheet.getRange(found.rowIndex, 2).setValue(salt + ":" + hashPassSalted_(newPassword, salt));
+  logAction_(actor, "Change Admin Password", actor, "");
   return { success: true, message: "Password changed." };
+}
+
+// Any already-authenticated admin can create another admin account —
+// this is the "increase admins later" path. New accounts start with no
+// active session token until they log in themselves.
+function adminCreateAdmin(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const username = String(p.username || "").trim();
+  const password = p.password || "";
+  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+    return { success: false, error: "Username must be 3-30 characters: letters, numbers, dots, dashes, underscores only." };
+  }
+  if (!password || password.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters." };
+  }
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { success: false, error: "Server is busy, please try again in a moment." };
+  }
+  try {
+    const sheet = getAdminsSheet_();
+    if (findAdminRow_(sheet, username)) {
+      return { success: false, error: "That admin username already exists." };
+    }
+    const salt = makeSalt_();
+    sheet.appendRow([username, salt + ":" + hashPassSalted_(password, salt), new Date().toISOString(), actor, "", ""]);
+    logAction_(actor, "Create Admin", username, "");
+    return { success: true, message: "Admin account created." };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Lists admin usernames/createdAt only — never password hashes or tokens.
+function adminListAdmins(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const sheet = getAdminsSheet_();
+  const data = sheet.getDataRange().getValues();
+  const admins = [];
+  for (let i = 1; i < data.length; i++) {
+    admins.push({ username: data[i][0], createdAt: data[i][2], createdBy: data[i][3] });
+  }
+  return { success: true, admins };
+}
+
+// Refuses to delete the last remaining admin (would lock everyone out)
+// and refuses to let an admin delete their own account while logged in
+// (avoids an accidental self-lockout mid-session — log in as someone
+// else first, then remove the old account).
+function adminDeleteAdmin(p) {
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
+  const username = String(p.username || "").trim();
+  if (!username) return { success: false, error: "Username required." };
+  if (username.toLowerCase() === actor.toLowerCase()) {
+    return { success: false, error: "You can't delete the admin account you're currently logged in as." };
+  }
+  const sheet = getAdminsSheet_();
+  if (sheet.getLastRow() - 1 <= 1) {
+    return { success: false, error: "Can't delete the last remaining admin account." };
+  }
+  const found = findAdminRow_(sheet, username);
+  if (!found) return { success: false, error: "Admin not found." };
+  sheet.deleteRow(found.rowIndex);
+  logAction_(actor, "Delete Admin", username, "");
+  return { success: true, message: "Admin account deleted." };
 }
 
 function adminListUsers(p) {
@@ -1010,7 +1408,8 @@ function adminListPayments(p) {
 }
 
 function adminReviewPayment(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
 
   const username = String(p.username || "").trim();
   const status = String(p.status || "").trim();
@@ -1058,7 +1457,7 @@ function adminReviewPayment(p) {
     }
   }
 
-  logAction_(ADMIN_USERNAME, "Review Payment", username, "Status: " + status + (rejectionReason ? " (" + rejectionReason + ")" : ""));
+  logAction_(actor, "Review Payment", username, "Status: " + status + (rejectionReason ? " (" + rejectionReason + ")" : ""));
   return { success: true, username, status };
 }
 
@@ -1067,7 +1466,8 @@ function adminReviewPayment(p) {
 // back to the payment/renewal screen automatically on their next login or
 // session check — see checkYearlyExpiry_()).
 function adminGrantAccess(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
 
   const username = String(p.username || "").trim();
   const duration = String(p.duration || "").trim(); // "permanent" | "year"
@@ -1094,14 +1494,15 @@ function adminGrantAccess(p) {
   sheet.getRange(found.rowIndex, 15).setValue(duration === "year" ? "yearly" : "permanent"); // accessType
   sheet.getRange(found.rowIndex, 16).setValue(expiresAtIso);      // accessExpiresAt
 
-  logAction_(ADMIN_USERNAME, "Grant Access", username, "Duration: " + duration);
+  logAction_(actor, "Grant Access", username, "Duration: " + duration);
   return { success: true, username, duration, accessExpiresAt: expiresAtIso };
 }
 
 // Column indices below follow USER_HEADERS: name=3, email=4, mobile=5,
 // status=8, permanentAccess=14 (1-indexed sheet columns).
 function adminUpdateUser(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
   const username = String(p.username || "").trim();
   if (!username) return { success: false, error: "Username required." };
 
@@ -1126,30 +1527,32 @@ function adminUpdateUser(p) {
     changes.push("password reset");
   }
 
-  logAction_(ADMIN_USERNAME, "Update User", username, changes.join(", "));
+  logAction_(actor, "Update User", username, changes.join(", "));
   return { success: true, username };
 }
 
 function adminDeleteUser(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
   const username = String(p.username || "").trim();
   const sheet = getUsersSheet_();
   const found = findUserRow_(sheet, username);
   if (!found) return { success: false, error: "User not found." };
   sheet.deleteRow(found.rowIndex);
-  logAction_(ADMIN_USERNAME, "Delete User", username, "");
+  logAction_(actor, "Delete User", username, "");
   return { success: true, deleted: username };
 }
 
 function adminDeletePayment(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
   const username = String(p.username || "").trim();
   const sheet = getPaymentsSheet_();
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).toLowerCase() === username.toLowerCase()) {
       sheet.deleteRow(i + 1);
-      logAction_(ADMIN_USERNAME, "Delete Payment", username, "");
+      logAction_(actor, "Delete Payment", username, "");
       return { success: true, deleted: username };
     }
   }
@@ -1157,7 +1560,8 @@ function adminDeletePayment(p) {
 }
 
 function adminUpdateSettings(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
   const key = String(p.key || "").trim();
   const value = (p.value !== undefined) ? p.value : "";
   if (!key) return { success: false, error: "Setting key required." };
@@ -1168,17 +1572,18 @@ function adminUpdateSettings(p) {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === key) {
       sheet.getRange(i + 1, 2).setValue(value);
-      logAction_(ADMIN_USERNAME, "Update Setting", key, "New value: " + value);
+      logAction_(actor, "Update Setting", key, "New value: " + value);
       return { success: true, key, value };
     }
   }
   sheet.appendRow([key, value]);
-  logAction_(ADMIN_USERNAME, "Update Setting", key, "New value: " + value);
+  logAction_(actor, "Update Setting", key, "New value: " + value);
   return { success: true, key, value };
 }
 
 function adminUpdateSettingsBatch(p) {
-  if (!checkAdmin_(p)) return { success: false, error: "Admin auth failed." };
+  const actor = checkAdmin_(p);
+  if (!actor) return { success: false, error: "Admin auth failed." };
   const incoming = p.settings;
   if (!Array.isArray(incoming) || !incoming.length) {
     return { success: false, error: "settings array required." };
@@ -1205,7 +1610,7 @@ function adminUpdateSettingsBatch(p) {
     applied.push(key);
   }
 
-  logAction_(ADMIN_USERNAME, "Update Settings (batch)", applied.join(", "), "");
+  logAction_(actor, "Update Settings (batch)", applied.join(", "), "");
   return { success: true, updated: applied };
 }
 
@@ -1283,7 +1688,7 @@ function fixSheetFormatting() {
 
 function testAll() {
   console.log("═══════════════════════════════════════════════════════");
-  console.log("  HAMRO AFNAI v4.0 — FULL SYSTEM TEST");
+  console.log("  HAMRO AFNAI v10 — FULL SYSTEM TEST");
   console.log("═══════════════════════════════════════════════════════");
 
   // 1. Setup

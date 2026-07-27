@@ -29,6 +29,12 @@ body{font-family:var(--ff);background:var(--c0);color:var(--t1);min-height:100vh
 .fld input::placeholder{color:var(--t3);opacity:.5}
 .btn{width:100%;padding:.82rem;background:linear-gradient(135deg,var(--amb2),var(--amb));border:none;border-radius:var(--r2);color:#0F0A00;font-size:.92rem;font-weight:700;font-family:var(--fd);cursor:pointer;transition:all var(--ease);box-shadow:0 4px 20px rgba(245,166,35,.3),inset 0 1px 0 rgba(255,255,255,.18);letter-spacing:.3px}
 .btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 28px rgba(245,166,35,.45)}
+.btn:active:not(:disabled),.btn-s:active:not(:disabled),.tb-btn:active,.sb-item:active{transform:scale(.97)}
+/* Keyboard-only focus ring — :focus-visible so mouse clicks stay clean;
+   form inputs keep their own amber box-shadow (see .fld input:focus
+   above) on top of this for any focus, keyboard or not. */
+:focus-visible{outline:2px solid var(--amb);outline-offset:2px;border-radius:4px}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid rgba(0,0,0,.25);border-top-color:#000;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:.4rem}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -221,11 +227,11 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
     <div class="gate-logo">
       <div class="icon">🛡️</div>
       <h1>Admin World</h1>
-      <p>HAMRO AFNAI v4.0 Management</p>
+      <p>HAMRO AFNAI v10 Management</p>
     </div>
-    <div class="err" id="err"></div>
-    <div class="fld"><label>Admin Username</label><input type="text" id="ad-user" placeholder="admin" autocomplete="username" autocapitalize="none"></div>
-    <div class="fld"><label>Password</label><input type="password" id="ad-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <div class="err" id="err" role="alert" aria-live="assertive"></div>
+    <div class="fld"><label for="ad-user">Admin Username</label><input type="text" id="ad-user" placeholder="admin" autocomplete="username" autocapitalize="none"></div>
+    <div class="fld"><label for="ad-pass">Password</label><input type="password" id="ad-pass" placeholder="••••••••" autocomplete="current-password"></div>
     <button class="btn" id="btn-login" onclick="ADMIN.login()">Enter Admin Panel →</button>
     <div class="link-row"><a onclick="localStorage.removeItem('hau_admin'); localStorage.removeItem('hau_session'); location.href='index.html'">← Back to User Login</a></div>
   </div>
@@ -259,7 +265,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   <div id="layout">
     <div id="ov" onclick="UI.sidebarClose()"></div>
     <div id="sb">
-      <button class="sb-close" onclick="UI.sidebarClose()">✕</button>
+      <button class="sb-close" onclick="UI.sidebarClose()" aria-label="Close menu">✕</button>
       <div class="sb-lbl">Menu</div>
       <div class="sb-item active" id="nav-dashboard" onclick="UI.nav('dashboard')"><div class="sb-ic">📊</div>Dashboard</div>
       <div class="sb-item" id="nav-users" onclick="UI.nav('users')"><div class="sb-ic">👤</div>Users</div>
@@ -268,6 +274,8 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
       <div class="sb-item" id="nav-settings" onclick="UI.nav('settings')"><div class="sb-ic">⚙️</div>Settings</div>
       <div class="sb-div"></div>
       <div class="sb-item" onclick="localStorage.removeItem('hau_admin'); localStorage.removeItem('hau_session'); location.href='index.html'"><div class="sb-ic">🏠</div>User Portal</div>
+      <!-- Bump alongside app.js's APP_VERSION and CODE.GS's APP_VERSION when releasing — three separate scripts, so this can't share one constant across files, only stay manually in sync. -->
+      <div style="text-align:center;font-size:.62rem;color:var(--t3);opacity:.6;padding:.6rem 0 .2rem">HAMRO AFNAI v10.0</div>
     </div>
 
     <div id="main">
@@ -302,7 +310,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
         <div class="ph"><h2>👤 Users</h2><p>Manage all registered accounts</p></div>
         <div class="toolbar">
           <input type="text" id="u-search" placeholder="🔍 Search username, name, email…" oninput="USERS.debouncedFilter()">
-          <select id="u-filter" onchange="USERS.filter()">
+          <select id="u-filter" onchange="USERS.filter()" aria-label="Filter users">
             <option value="all">All Status</option>
             <option value="trial">Trial</option>
             <option value="active">Active</option>
@@ -313,7 +321,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <button class="btn-s btn-c" onclick="ADMIN.exportUsers()">📥 CSV</button>
         </div>
         <div class="tbl-wrap"><table id="users-tbl"><thead><tr>
-          <th><input type="checkbox" class="chk" id="u-chk-all" onchange="USERS.toggleAll()"></th>
+          <th><input type="checkbox" class="chk" id="u-chk-all" onchange="USERS.toggleAll()" aria-label="Select all users"></th>
           <th>User</th><th>Contact</th><th>Status</th><th>Created</th><th>Access</th><th style="text-align:right">Actions</th>
         </tr></thead><tbody id="users-body"><tr><td colspan="7" class="empty"><div class="empty-i">📭</div><p>No users found</p></td></tr></tbody></table></div>
         <div class="pg" id="u-pg"></div>
@@ -324,7 +332,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
         <div class="ph"><h2>💳 Payments</h2><p>Verify or reject payment submissions</p></div>
         <div class="toolbar">
           <input type="text" id="p-search" placeholder="🔍 Search username, TXN ID…" oninput="PAYMENTS.debouncedFilter()">
-          <select id="p-filter" onchange="PAYMENTS.filter()">
+          <select id="p-filter" onchange="PAYMENTS.filter()" aria-label="Filter payments">
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
             <option value="verified">Verified</option>
@@ -339,7 +347,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
           <button class="btn-s btn-sm" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="PAYMENTS.clearSelection()">Clear</button>
         </div>
         <div class="tbl-wrap"><table id="payments-tbl"><thead><tr>
-          <th><input type="checkbox" class="chk" id="p-chk-all" onchange="PAYMENTS.toggleAll()"></th>
+          <th><input type="checkbox" class="chk" id="p-chk-all" onchange="PAYMENTS.toggleAll()" aria-label="Select all payments"></th>
           <th>User</th><th>TXN ID</th><th>Amount</th><th>Status</th><th>Submitted</th><th style="text-align:right">Actions</th>
         </tr></thead><tbody id="payments-body"><tr><td colspan="7" class="empty"><div class="empty-i">📭</div><p>No payments found</p></td></tr></tbody></table></div>
         <div class="pg" id="p-pg"></div>
@@ -350,7 +358,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
         <div class="ph"><h2>📋 Activity Logs</h2><p>Track all admin actions</p></div>
         <div class="toolbar">
           <input type="text" id="l-search" placeholder="🔍 Search action, admin, target…" oninput="LOGS.filter()">
-          <select id="l-filter" onchange="LOGS.filter()">
+          <select id="l-filter" onchange="LOGS.filter()" aria-label="Filter activity logs">
             <option value="all">All Actions</option>
             <option value="verify">Verified Payment</option>
             <option value="reject">Rejected Payment</option>
@@ -372,25 +380,35 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
         <div class="ph"><h2>⚙️ Settings</h2><p>Configure payment, QR, and app info</p></div>
         <div class="card">
           <div class="card-hd"><h3>Payment Configuration</h3></div>
-          <div class="sf"><label>App Name</label><input type="text" id="set-name" placeholder="HAMRO AFNAI"></div>
+          <div class="sf"><label for="set-name">App Name</label><input type="text" id="set-name" placeholder="HAMRO AFNAI"></div>
           <div class="sf">
-            <label>Payment QR Code</label>
+            <label for="set-qr-file">Payment QR Code</label>
             <input type="file" id="set-qr-file" accept="image/*" onchange="SETTINGS.onQrFile(event)">
             <div style="display:flex;align-items:center;gap:.6rem;margin-top:.5rem">
-              <img id="set-qr-preview" style="display:none;width:90px;height:90px;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#fff">
+              <img id="set-qr-preview" alt="Payment QR code preview" style="display:none;width:90px;height:90px;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#fff">
               <span id="set-qr-status" style="font-size:.85rem;opacity:.7">No QR uploaded yet</span>
             </div>
             <input type="hidden" id="set-qr">
           </div>
-          <div class="sf"><label>Contact Phone</label><input type="text" id="set-phone" placeholder="9863200285"></div>
-          <div class="sf"><label>Payment Amount (Rs)</label><input type="number" id="set-amount" placeholder="100" min="1"></div>
-          <div class="sf"><label>Payment Instructions</label><textarea id="set-inst" placeholder="Instructions shown to users…"></textarea></div>
-          <div class="sf"><label>Trial Hours</label><input type="number" id="set-trial" placeholder="24" min="1"></div>
+          <div class="sf"><label for="set-phone">Contact Phone</label><input type="text" id="set-phone" placeholder="9863200285"></div>
+          <div class="sf"><label for="set-amount">Payment Amount (Rs)</label><input type="number" id="set-amount" placeholder="100" min="1"></div>
+          <div class="sf"><label for="set-inst">Payment Instructions</label><textarea id="set-inst" placeholder="Instructions shown to users…"></textarea></div>
+          <div class="sf"><label for="set-trial">Trial Hours</label><input type="number" id="set-trial" placeholder="24" min="1"></div>
           <hr>
           <div style="display:flex;gap:.4rem;flex-wrap:wrap">
             <button class="btn" style="width:auto;padding:.6rem 1.2rem" onclick="SETTINGS.save()">💾 Save Settings</button>
-            <button class="btn-s btn-r" onclick="ADMIN.changePassword()">🔐 Change Admin Password</button>
+            <button class="btn-s btn-r" onclick="ADMIN.changePassword()">🔐 Change My Password</button>
           </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hd"><h3>Admin Accounts</h3></div>
+          <p style="font-size:.8rem;opacity:.7;margin:0 0 .8rem">Anyone with an admin login can create more admins here — useful for handing off review work without sharing one password.</p>
+          <div id="admins-list" style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:.8rem"></div>
+          <hr>
+          <div class="sf"><label for="adm-new-user">New Admin Username</label><input type="text" id="adm-new-user" placeholder="letters, numbers, . _ - only"></div>
+          <div class="sf"><label for="adm-new-pass">New Admin Password</label><input type="password" id="adm-new-pass" placeholder="Min 6 characters"></div>
+          <button class="btn-s btn-g" onclick="ADMINS.create()">➕ Add Admin</button>
         </div>
       </div>
     </div>
@@ -400,7 +418,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 <!-- REVIEW MODAL -->
 <div class="mbg" id="mbg-review" onclick="MODAL.close('review')">
   <div class="mbox" onclick="event.stopPropagation()">
-    <div class="mhd"><h3 id="mtitle-review">Review Payment</h3><button class="mcl" onclick="MODAL.close('review')">✕</button></div>
+    <div class="mhd"><h3 id="mtitle-review">Review Payment</h3><button class="mcl" onclick="MODAL.close('review')" aria-label="Close dialog">✕</button></div>
     <div class="mbody" id="mbody-review"></div>
   </div>
 </div>
@@ -408,7 +426,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 <!-- USER DETAIL MODAL -->
 <div class="mbg" id="mbg-user" onclick="MODAL.close('user')">
   <div class="mbox wide" onclick="event.stopPropagation()">
-    <div class="mhd"><h3 id="mtitle-user">User Details</h3><button class="mcl" onclick="MODAL.close('user')">✕</button></div>
+    <div class="mhd"><h3 id="mtitle-user">User Details</h3><button class="mcl" onclick="MODAL.close('user')" aria-label="Close dialog">✕</button></div>
     <div class="mbody" id="mbody-user"></div>
   </div>
 </div>
@@ -416,11 +434,11 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
 <!-- CHANGE PASSWORD MODAL -->
 <div class="mbg" id="mbg-pwd" onclick="MODAL.close('pwd')">
   <div class="mbox" onclick="event.stopPropagation()">
-    <div class="mhd"><h3>Change Admin Password</h3><button class="mcl" onclick="MODAL.close('pwd')">✕</button></div>
+    <div class="mhd"><h3>Change Admin Password</h3><button class="mcl" onclick="MODAL.close('pwd')" aria-label="Close dialog">✕</button></div>
     <div class="mbody">
-      <div class="sf"><label>Current Password</label><input type="password" id="pwd-current" placeholder="••••••••"></div>
-      <div class="sf"><label>New Password</label><input type="password" id="pwd-new" placeholder="Min 6 characters"></div>
-      <div class="sf"><label>Confirm New Password</label><input type="password" id="pwd-confirm" placeholder="••••••••"></div>
+      <div class="sf"><label for="pwd-current">Current Password</label><input type="password" id="pwd-current" placeholder="••••••••"></div>
+      <div class="sf"><label for="pwd-new">New Password</label><input type="password" id="pwd-new" placeholder="Min 6 characters"></div>
+      <div class="sf"><label for="pwd-confirm">Confirm New Password</label><input type="password" id="pwd-confirm" placeholder="••••••••"></div>
       <div style="display:flex;gap:.4rem;margin-top:.5rem">
         <button class="btn-s btn-g" style="flex:1" onclick="ADMIN.doChangePassword()">Save New Password</button>
         <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('pwd')">Cancel</button>
@@ -429,7 +447,7 @@ hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
@@ -521,12 +539,13 @@ const ADMIN = {
   async refresh() {
     this.showLoading('Refreshing data…');
     try {
-      const [stats, users, payments, settings, logs] = await Promise.all([
+      const [stats, users, payments, settings, logs, admins] = await Promise.all([
         this.post('adminStats'),
         this.post('adminListUsers'),
         this.post('adminListPayments'),
         this.post('getSettings'),
-        this.post('adminListLogs').catch(() => ({success:false, logs:[]}))
+        this.post('adminListLogs').catch(() => ({success:false, logs:[]})),
+        this.post('adminListAdmins').catch(() => ({success:false, admins:[]}))
       ]);
       const failures = [];
       if (stats.success) this.renderStats(stats.stats); else failures.push('stats: '+(stats.error||'unknown'));
@@ -534,6 +553,7 @@ const ADMIN = {
       if (payments.success) { this.data.payments = payments.payments; PAYMENTS.render(); } else failures.push('payments: '+(payments.error||'unknown'));
       if (settings.success) { this.data.settings = settings.settings; SETTINGS.load(); }
       if (logs.success) { this.data.logs = logs.logs; LOGS.render(); }
+      if (admins.success) ADMINS.render(admins.admins);
       if (failures.length) {
         this.toast('❌ Some data failed to load — ' + failures[0] + (failures.length>1 ? ` (+${failures.length-1} more)` : ''));
         // Auth failures specifically mean the stored admin session is stale/invalid.
@@ -631,6 +651,61 @@ const ADMIN = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// ADMIN ACCOUNTS — multi-admin management (Settings tab)
+// ═══════════════════════════════════════════════════════════════
+const ADMINS = {
+  list: [],
+  render(admins) {
+    this.list = admins || [];
+    const box = document.getElementById('admins-list');
+    if (!box) return; // Settings view not built yet on first load — fine, refresh() re-renders on tab switch too
+    if (!this.list.length) { box.innerHTML = '<p style="font-size:.8rem;opacity:.6">No admin accounts found.</p>'; return; }
+    const me = (ADMIN.creds?.user || '').toLowerCase();
+    box.innerHTML = this.list.map(a => {
+      const isMe = a.username.toLowerCase() === me;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:var(--b0);border:1px solid var(--b1);border-radius:8px">
+        <div>
+          <div style="font-weight:600;font-size:.85rem">${esc(a.username)}${isMe ? ' <span style="opacity:.6;font-weight:400">(you)</span>' : ''}</div>
+          <div style="font-size:.68rem;opacity:.6">Added ${a.createdAt ? new Date(a.createdAt).toLocaleDateString() : '—'}${a.createdBy ? ' by ' + esc(a.createdBy) : ''}</div>
+        </div>
+        ${isMe ? '' : `<button class="btn-s btn-r btn-sm" onclick="ADMINS.del('${a.username}')">🗑 Remove</button>`}
+      </div>`;
+    }).join('');
+  },
+  async create() {
+    const u = document.getElementById('adm-new-user').value.trim();
+    const p = document.getElementById('adm-new-pass').value;
+    if (!u || !p) return ADMIN.toast('❌ Enter a username and password');
+    if (p.length < 6) return ADMIN.toast('❌ Password must be 6+ chars');
+    ADMIN.showLoading('Creating admin…');
+    try {
+      const res = await ADMIN.post('adminCreateAdmin', {username: u, password: p});
+      if (res.success) {
+        ADMIN.toast('✅ Admin "' + u + '" created');
+        document.getElementById('adm-new-user').value = '';
+        document.getElementById('adm-new-pass').value = '';
+        const r = await ADMIN.post('adminListAdmins');
+        if (r.success) this.render(r.admins);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  },
+  async del(username) {
+    if (!confirm(`Remove admin "${username}"? They'll lose access immediately.`)) return;
+    ADMIN.showLoading('Removing admin…');
+    try {
+      const res = await ADMIN.post('adminDeleteAdmin', {username});
+      if (res.success) {
+        ADMIN.toast('✅ Admin removed');
+        const r = await ADMIN.post('adminListAdmins');
+        if (r.success) this.render(r.admins);
+      } else throw new Error(res.error);
+    } catch(e) { ADMIN.toast('❌ ' + e.message); }
+    ADMIN.hideLoading();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
 // UI NAVIGATION
 // ═══════════════════════════════════════════════════════════════
 const UI = {
@@ -721,7 +796,7 @@ const USERS = {
       const access = USERS.accessLabel(u);
       const checked = this.selected.has(u.username) ? 'checked' : '';
       return `<tr>
-        <td><input type="checkbox" class="chk" ${checked} onchange="USERS.toggle('${u.username}')"></td>
+        <td><input type="checkbox" class="chk" ${checked} onchange="USERS.toggle('${u.username}')" aria-label="Select user ${esc(u.username)}"></td>
         <td><div style="font-weight:600;color:var(--t1);cursor:pointer" onclick="USERS.view('${u.username}')">${esc(u.name)||u.username}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${u.username}</div></td>
         <td><div style="font-size:.72rem">${esc(u.email)||'—'}</div><div style="font-size:.68rem;color:var(--t3)">${esc(u.mobile)||'—'}</div></td>
         <td><span class="badge ${badge}">${u.status}</span></td>
@@ -823,10 +898,10 @@ const USERS = {
     if (!u) return;
     document.getElementById('mtitle-user').textContent = 'Edit User: ' + username;
     document.getElementById('mbody-user').innerHTML = `
-      <div class="sf"><label>Full Name</label><input type="text" id="edit-name" value="${esc(u.name)}"></div>
-      <div class="sf"><label>Email</label><input type="email" id="edit-email" value="${esc(u.email)}"></div>
-      <div class="sf"><label>Mobile</label><input type="text" id="edit-mobile" value="${esc(u.mobile)}"></div>
-      <div class="sf"><label>Status</label>
+      <div class="sf"><label for="edit-name">Full Name</label><input type="text" id="edit-name" value="${esc(u.name)}"></div>
+      <div class="sf"><label for="edit-email">Email</label><input type="email" id="edit-email" value="${esc(u.email)}"></div>
+      <div class="sf"><label for="edit-mobile">Mobile</label><input type="text" id="edit-mobile" value="${esc(u.mobile)}"></div>
+      <div class="sf"><label for="edit-status">Status</label>
         <select id="edit-status">
           <option value="trial" ${u.status==='trial'?'selected':''}>Trial</option>
           <option value="active" ${u.status==='active'?'selected':''}>Active</option>
@@ -836,7 +911,7 @@ const USERS = {
         </select>
       </div>
       <div class="sf"><label><input type="checkbox" id="edit-permanent" ${u.permanentAccess?'checked':''} style="accent-color:var(--amb);margin-right:.3rem"> Permanent Access</label></div>
-      <div class="sf"><label>Reset Password (leave blank to keep)</label><input type="text" id="edit-password" placeholder="New password…"></div>
+      <div class="sf"><label for="edit-password">Reset Password (leave blank to keep)</label><input type="text" id="edit-password" placeholder="New password…"></div>
       <div style="display:flex;gap:.4rem;margin-top:.5rem">
         <button class="btn-s btn-g" style="flex:1" onclick="USERS.saveEdit('${username}')">💾 Save Changes</button>
         <button class="btn-s" style="background:var(--b0);border:1px solid var(--b1);color:var(--t2)" onclick="MODAL.close('user')">Cancel</button>
@@ -924,7 +999,7 @@ const PAYMENTS = {
       const badge = p.status==='pending'?'badge-pending':p.status==='verified'?'badge-verified':'badge-rejected';
       const checked = this.selected.has(p.username) ? 'checked' : '';
       return `<tr>
-        <td><input type="checkbox" class="chk" ${checked} onchange="PAYMENTS.toggle('${p.username}')"></td>
+        <td><input type="checkbox" class="chk" ${checked} onchange="PAYMENTS.toggle('${p.username}')" aria-label="Select payment from ${esc(p.username)}"></td>
         <td><div style="font-weight:600;color:var(--t1)">${esc(p.name)||p.username}</div><div class="mono" style="font-size:.68rem;color:var(--t3)">${p.username}</div></td>
         <td class="mono">${esc(p.txId)}${p.duplicateTxId ? ` <span title="Also submitted by: ${esc(p.duplicateTxIdUsers.join(', '))}" style="color:var(--warn,#f5a623);cursor:help">⚠️</span>` : ''}</td>
         <td style="font-size:.72rem">Rs ${ADMIN.data.settings.paymentAmount||'100'}</td>
@@ -1049,8 +1124,8 @@ const MODAL = {
         <div style="font-size:.8rem">${esc(p.remarks)||'—'}</div>
       </div>
       ${p.screenshotUrl && p.screenshotUrl.startsWith('http') ? `<div style="margin-bottom:.8rem"><div style="font-size:.78rem;color:var(--t3);margin-bottom:.15rem">Screenshot</div><a href="${esc(p.screenshotUrl)}" target="_blank" rel="noopener" style="color:var(--sky);font-size:.78rem">View Screenshot →</a></div>` : ''}
-      ${action==='rejected' ? `<div class="sf" style="margin-bottom:.8rem"><label>Rejection Reason</label><input type="text" id="rej-reason" placeholder="Why are you rejecting this payment?"></div>` : ''}
-      ${action==='verified' ? `<div class="sf" style="margin-bottom:.8rem"><label>Grant Duration</label>
+      ${action==='rejected' ? `<div class="sf" style="margin-bottom:.8rem"><label for="rej-reason">Rejection Reason</label><input type="text" id="rej-reason" placeholder="Why are you rejecting this payment?"></div>` : ''}
+      ${action==='verified' ? `<div class="sf" style="margin-bottom:.8rem"><label for="grant-duration">Grant Duration</label>
         <select id="grant-duration">
           <option value="permanent">♾️ Permanent</option>
           <option value="year">📅 1 Year</option>
