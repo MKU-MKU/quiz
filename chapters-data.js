@@ -175,7 +175,8 @@ const DRIVE = {
       "DPARSAD": { "All": "1ipRrpTWBA7JIdwCuTY73ZZwY0CTM-LAP" }
     },
     "6": {
-      "DPARSAD": { "1-75": "1cQGpQHGzekcDnE2duOkYzx3NAoeuPv5h", "76-150": "1T2tghXwm_6Dqy5FkQgs0wiRrhl0NQuGM", "151-225": "1tro7AirSkoOm9zYvJyQo5W_hlUvoqvlg", "225-310": "12jhiq9Jbp3EwvqJgW_bxyPq77IYfUEAa" }
+      "New DPARSAD": { "1-75": "1cQGpQHGzekcDnE2duOkYzx3NAoeuPv5h", "76-150": "1T2tghXwm_6Dqy5FkQgs0wiRrhl0NQuGM", "151-225": "1tro7AirSkoOm9zYvJyQo5W_hlUvoqvlg", "225-310": "12jhiq9Jbp3EwvqJgW_bxyPq77IYfUEAa" },
+       "Old DPRASAD ":{ "1-50": "1qtgweA9KWmVLREF4rm7D6sCUdc1NMqLQ", "50-100": "1981sMj5WNTZeKsghbz4N_eEqqxm1XbT5", "100-150": "1KY9GTqB8sTJpGha_JnYYE9Pvnnzotf9h", "150-200": "18HnjG1-leT6OXk5mYPGTJluMw2yiFUEy","200-300": "1KA-3P2cmmQKQRmr_-UU74ik_MmNsJ8F2" }
     },
     "7": {
       "DPARSAD": { "1-50": "1WR0c-cQrD6ZNrpW31pgFTrhekyT_0n4K", "51-100": "1RjkK83GYpLncIqJJ2FGYkHh0FGGksJ_J", "101-150": "1O3bhzDvGZfUTy1T9guFuq_aAn3PAq7Xi", "151-200": "1E22sJNC6miJwVNDD5cz8EW3OXTWKc4XT", "201-250": "17--tjx9xOlDmZD_kFEoZb620aoB-cvQt" }
@@ -187,7 +188,7 @@ const DRIVE = {
       "DPARSAD": { "1-75": "1vzp6vp3jscMoDEsNwLTAdX6fw2qoOe55", "75-129": "1abshceD1-c5wygd9L32gAoLpuYdBqkd8" }
     },
     "10": {
-      "DPARSAD": { "1-113": "1V5JicjEQWiQy-UprrRfM_YJgXOQNwWgX" }
+      "DPARSAD": { "1-111": "16Yw0SALw-Vk1KR-7HnRZdetJFqarj7S2" }
     }
   },
   gk: {
