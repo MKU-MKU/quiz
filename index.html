@@ -341,7 +341,8 @@ const APP = {
       const r = await fetch(GAS_URL + '?action=ping&_=' + Date.now(), { signal: ctrl.signal, cache: 'no-store' });
       clearTimeout(to);
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      await r.json(); // ensure valid JSON
+      const data = await r.json();
+      if (!data.pong && !data.success) throw new Error('Unexpected ping response');
       this.online = true;
       dot.className = 'ndot';
       txt.textContent = 'Backend connected';

@@ -30,7 +30,7 @@
                          orphaned responses sitting in Cache Storage.
 ═══════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'ha-shell-v10'; // Bumped: getFile responses are now actually cached (previously dead code targeted drive.google.com, which nothing ever fetches directly — see CODE.GS's handleGetFile comment on why Drive is always proxied through this same script.google.com endpoint instead).
+const CACHE_NAME = 'ha-shell-v11'; // Bumped: API fetch failures now rethrow instead of returning a fake 200 success:false Response — that fake success was silently defeating every offline-fallback try/catch in index.html/app.js (see the fetch handler below). Bumping the name forces every installed client to pick up this fix on next visit instead of running the old cached SW indefinitely.
 const SHELL = [
   './',
   './index.html',
@@ -152,10 +152,22 @@ self.addEventListener('fetch', e => {
           const cached = await caches.match(e.request);
           if (cached) return cached;
         }
-        return new Response(
-          JSON.stringify({ success: false, error: 'Offline — use cached data' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+        // IMPORTANT: do NOT return a fabricated Response here. A Response
+        // (even one carrying `success:false` in its JSON body) resolves the
+        // page's fetch() promise normally — it does not throw. Every
+        // offline-fallback in index.html/app.js (checkNet(), AUTH.restore(),
+        // login(), etc.) is written as try{ real network call }catch{ trust
+        // cached session/show a real error }, specifically so a genuine
+        // network failure is *caught*, not parsed as a successful-but-
+        // negative API response. Returning a 200 here used to short-circuit
+        // that: the page saw a "successful" round-trip with success:false
+        // and treated it as a real (and often stale) server verdict —
+        // bouncing permanent users back to index.html, or telling
+        // checkNet() login() etc. "offline" is a real answer from the
+        // server. Rethrowing lets fetch() reject exactly like it would with
+        // no service worker at all, so those try/catch fallbacks work as
+        // designed again.
+        throw err;
       }
     }
 

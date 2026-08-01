@@ -296,6 +296,50 @@ async function netFetch(url, opts, timeoutMs=20000){
   }
 }
 
+/* ═══════════════ 3b. NETCHECK — active reachability check ═══════════════
+   navigator.onLine (used to seed S.online above, and the 'online'/'offline'
+   window events below) only reports whether the device's network interface
+   is up — it says nothing about whether script.google.com is actually
+   reachable, and on installed PWAs / mobile browsers the online/offline
+   events are known to stop firing correctly after the app resumes from
+   background or sleep, leaving S.online stuck wrong until a full reload.
+   index.html already solves this with an active ping loop (checkNet());
+   this mirrors that here so user.html's "online/offline" status — and
+   therefore AUTH.restore()'s decision to trust cache vs. re-validate — is
+   based on a real round-trip, not just the browser's guess. */
+const NETCHECK = {
+  _timer: null,
+  async ping(){
+    if(S.forcedOffline) return S.online;
+    try{
+      const ctrl = new AbortController();
+      const to = setTimeout(()=>ctrl.abort(), 8000);
+      const r = await fetch(`${APPS}?${qs({action:'ping', _:Date.now()})}`, { signal: ctrl.signal, cache: 'no-store' });
+      clearTimeout(to);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const data = await r.json();
+      // A 200 alone isn't proof of a real answer — confirm the body is
+      // actually the ping payload, not e.g. a captive-portal page or a
+      // masked failure, before trusting it.
+      const wasOnline = S.online;
+      S.online = !!data.pong || !!data.success;
+      if(S.online !== wasOnline){ _updateNetBtn(); _updateOfflineWarn(); }
+      return S.online;
+    }catch(e){
+      const wasOnline = S.online;
+      S.online = false;
+      if(wasOnline){ _updateNetBtn(); _updateOfflineWarn(); }
+      return false;
+    }
+  },
+  start(){
+    if(NETCHECK._timer) return;
+    // Don't ping immediately here — AUTH.restore() already awaits one ping
+    // at boot; this just keeps it fresh every 15s after that.
+    NETCHECK._timer = setInterval(()=>NETCHECK.ping(), 15000);
+  }
+};
+
 /* ═══════════════ 4. AUTH — SESSION GATE ONLY ═══════════════
    No login/signup/admin here. index.html already handled sign-in,
    the 24h trial, and payment verification, and only sends someone
@@ -319,6 +363,10 @@ const AUTH = {
       AUTH._bounce();
       return;
     }
+    // Confirm real connectivity with an actual round-trip before trusting
+    // navigator.onLine's guess — see NETCHECK.ping() above. This mirrors
+    // index.html's `await this.checkNet()` before resumeUserSession().
+    await NETCHECK.ping();
     // Offline (or forced offline): trust the cached session IF its access
     // level still looks valid (permanent, or trial that hasn't expired yet).
     if(!S.online || S.forcedOffline){
@@ -330,13 +378,28 @@ const AUTH = {
     try{
       const r = await netFetch(`${APPS}?${qs({action:'checkSession', token:u.token, username:u.username})}`, {redirect:'follow'});
       const res = await r.json();
-      if(!res.success){ AUTH._bounce(); return; }
+      if(!res.success){
+        // Any failure that isn't a definitive "this session is invalid"
+        // (sessionInvalid, from an expired/rotated/mismatched token — see
+        // CODE.GS's checkSession) shouldn't cost a genuinely permanent or
+        // still-valid-trial user their access. A cold-start hiccup, a
+        // malformed response, or a transient backend error all land here
+        // as res.success === false too, and previously bounced everyone
+        // unconditionally — even with a perfectly good cached session.
+        // Only hard-bounce when the session is explicitly rejected AND
+        // there's nothing valid cached to fall back on.
+        if(AUTH._isValidOffline(u)) AUTH._enter(u);
+        else AUTH._bounce();
+        return;
+      }
       const updated = AUTH._buildSession(u, res);
       _save(LS.USER, updated);
       if(updated.access.level === 'permanent' || updated.access.level === 'trial'){
         AUTH._enter(updated);
       } else {
-        // Expired, pending, or rejected — index.html owns that UI.
+        // Expired, pending, or rejected — index.html owns that UI. This IS
+        // a definitive server verdict (res.success was true), so it's
+        // trusted even over a cached session that looked valid before.
         AUTH._bounce();
       }
     }catch{
@@ -2324,10 +2387,14 @@ const NET = {
     _updateOfflineWarn();
   }
 };
-window.addEventListener('online', ()=>{
-  S.online=true;
-  _updateNetBtn();
-  _updateOfflineWarn();
+// The browser's 'online' event means the network interface came up — it
+// doesn't guarantee script.google.com is reachable (captive portals, DNS
+// hiccups, ISP-side blocks). Confirm with a real ping rather than trusting
+// the event outright; NETCHECK.ping() itself flips S.online and refreshes
+// the UI, so this only needs to fire the extra toasts on top of that.
+window.addEventListener('online', async ()=>{
+  const reallyOnline = await NETCHECK.ping();
+  if(!reallyOnline) return; // interface is up but the backend still isn't reachable — stay in offline mode, no false "back online" toast
   if(!S.forcedOffline) toast('🌐 Back online');
   else toast('🌐 Network restored — still in forced offline mode');
 });
@@ -2346,6 +2413,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(_load('ha_theme','dark')==='light') document.body.classList.add('light');
   PWA.init();
   AUTH.restore();
+  NETCHECK.start(); // keeps re-verifying every 15s so a stuck "offline" state (or a stale "online" one) self-corrects without needing a manual reload
 });
 
 /* ═══════════════ EXPLICIT GLOBAL EXPOSURE ═══════════════ */
