@@ -1,117 +1,173 @@
 # HAMRO AFNAI — Smart Study Hub
 
-Offline-first exam prep platform for Nepal Engineering (Level 5 / Level 7) and PSC/Loksewa, built as three static HTML pages + a shared backend on Google Apps Script + Google Sheets. No build step, no server framework — everything runs from static files plus one deployed Apps Script web app.
+**Offline-first exam prep platform for Nepal Engineering (Level 5 / Level 7) and PSC / Loksewa exams.**
+
+Built as three standalone static HTML pages backed by a single Google Apps Script + Google Sheets backend. There is no build step, no bundler, no server framework — you can literally open `index.html` in a browser and it works, once the backend URL is wired in.
+
+- **Version:** 10.0 (`APP_VERSION` in `app.js` and `CODE.GS`)
+- **Stack:** Vanilla HTML / CSS / JS on the frontend, Google Apps Script + Google Sheets + Google Drive on the backend
+- **Distribution:** Installable PWA (Progressive Web App) with offline caching
 
 ---
 
-## 1. How it all fits together
+## 1. What this app actually does
 
-```
-┌─────────────┐      ┌──────────────┐      ┌──────────────┐
-│ index.html  │─────▶│  user.html   │      │  admin.html  │
-│  (Gateway)  │      │ (Study App)  │      │(Admin Panel) │
-└──────┬──────┘      └──────┬───────┘      └──────┬───────┘
-       │                    │                      │
-       │ localStorage       │ loads                │ own login
-       │ 'hau_session'      │ app.js               │ 'hau_admin'
-       │                    │ chapters-data.js      │
-       │                    │                       │
-       └────────────────────┴───────────┬───────────┘
-                                         │  action=...
-                                         ▼
-                              ┌───────────────────────┐
-                              │      CODE.GS            │
-                              │ (Google Apps Script)    │
-                              │  Users / Payments /     │
-                              │  Settings Google Sheet  │
-                              └───────────┬─────────────┘
-                                          │
-                                          ▼
-                              Google Drive (question JSON files,
-                              referenced by fileId in chapters-data.js)
-```
+HAMRO AFNAI is a study app for students preparing for:
+- **Level 5 / Level 7 Engineering** licensing exams
+- **PSC / Loksewa** (Nepal Public Service Commission) exams
+- General Knowledge (GK) and old-question archives
 
-**The three pages never share code — only two things connect them:**
-1. The same deployed Apps Script URL (`GAS_URL` in `index.html`/`admin.html`, `APP_CONFIG.APPS_URL` in `app.js`) — all three must point at the identical `/exec` URL.
-2. The `hau_session` localStorage key, written only by `index.html`, read by `app.js` on `user.html`. (`admin.html` does **not** use this key — it has its own independent login, described below.)
+Students sign up, get a **24-hour free trial**, and then must submit a manual payment (QR code + transaction ID + screenshot) that an admin reviews and approves before permanent access is granted. Once inside, they get a full quiz/study app: flashcard-style review, timed exams, bookmarks, a wrong-answer bank, progress tracking, streaks, a personal timetable, and offline access to question sets they've downloaded in advance.
+
+An admin panel lets a site operator manage users, review/approve payments, and edit global settings (price, QR code image, contact info) — all without touching code.
 
 ---
 
-## 2. How it runs (no build step)
+## 2. High-level architecture
 
-This is plain HTML/CSS/JS — you don't compile or bundle anything.
+```
+┌─────────────┐        ┌──────────────┐        ┌──────────────┐
+│ index.html  │───────▶│  user.html   │        │  admin.html  │
+│  (Gateway)  │        │ (Study App)  │        │(Admin Panel) │
+└──────┬──────┘        └──────┬───────┘        └──────┬───────┘
+       │                      │                        │
+       │ writes               │ loads                  │ own login
+       │ localStorage         │ chapters-data.js        │ ('hau_admin')
+       │ 'hau_session'        │ then app.js             │
+       │                      │                          │
+       └──────────────────────┴────────────┬─────────────┘
+                                            │  HTTP GET/POST
+                                            │  ?action=...
+                                            ▼
+                                 ┌───────────────────────┐
+                                 │       CODE.GS          │
+                                 │ (Google Apps Script)   │
+                                 │  Auth / Payments /     │
+                                 │  Settings / Progress   │
+                                 └───────────┬─────────────┘
+                                            │
+                       ┌────────────────────┼────────────────────┐
+                       ▼                    ▼                    ▼
+                Google Sheets        Google Drive          Google Sheets
+             (Users, Payments,     (question-set JSON     (Progress sync,
+              Settings, Logs,       files + payment          Admins)
+              Admins, Progress)     screenshots)
+```
 
-1. **Deploy the backend once:**
-   - Open [script.google.com](https://script.google.com), paste `CODE.GS` into a new Apps Script project.
-   - Change `ADMIN_PASSWORD` in `CODE.GS` away from the default.
-   - Deploy → New deployment → Web app → Execute as "Me" → Who has access "Anyone".
-   - Copy the resulting `.../exec` URL.
-2. **Wire the frontend to it:** paste that URL into all three places:
+**The three frontend pages never share JavaScript code.** They are connected by exactly two contracts:
+
+1. **The same deployed Apps Script `/exec` URL** — must be identical in:
    - `index.html` → `const GAS_URL = "..."`
    - `admin.html` → `const GAS_URL = "..."`
    - `app.js` → `APP_CONFIG.APPS_URL`
-3. **Host the files:** any static host works (GitHub Pages, Netlify, Firebase Hosting, or just open `index.html` locally for testing — though the service worker/PWA install only works over HTTPS or `localhost`).
-4. **First run:** the Apps Script auto-creates the `Users`, `Payments`, and `Settings` sheets on first request — no manual sheet setup needed.
-5. **Content:** question sets live as JSON files on Google Drive (shared "Anyone with the link"); their file IDs are registered in `chapters-data.js` — see §4 below.
+2. **The `hau_session` localStorage key** — written only by `index.html` after a successful login/signup, and read by `app.js` on `user.html` to decide whether the visitor is allowed in. `admin.html` does **not** use this key; it has a completely separate login (`hau_admin`).
+
+There is no traditional database — **Google Sheets is the database** (Users, Payments, Settings, Logs, Admins, Progress tabs), and **Google Drive hosts the actual question content** as JSON files, referenced by file ID.
 
 ---
 
-## 3. What each file is responsible for
+## 3. End-to-end user workflow
 
-| File | Role | Loads / depends on |
-|---|---|---|
-| **`index.html`** | Gateway: signup, login, 24h trial countdown, payment submission (QR + TXN ID + screenshot), routes to `user.html` or `admin.html`. Owns the `hau_session` schema. | Standalone — talks directly to `CODE.GS`. No other local JS files. |
-| **`admin.html`** | Admin panel: list/search users, approve or reject payments, edit global settings (payment amount, QR image, contact info), view stats, change admin password. Has its **own** login gate (`hau_admin` key) independent of `index.html`. | Standalone — talks directly to `CODE.GS`. No other local JS files. |
-| **`user.html`** | The actual study app shell: all HTML structure/CSS for every view (home, quiz, bookmarks, timetable, offline cache, etc.), plus a small inline `<script>` "patch layer" at the bottom (search links, swipe gesture, bottom-nav wiring, PWA install button). | Loads `chapters-data.js`, then `app.js`, then its own inline script. |
-| **`app.js`** | All application logic: session gate, quiz engine (flashcard + exam), bookmarks/flags/wrong-bank, progress tracking, streaks, timetable + alarms, offline cache manager, data export/import, PWA registration. This is the file you'll touch for almost any feature change. | Reads globals from `chapters-data.js` (`ChapterData`, `CH_NAMES`, `DRIVE`). Talks to `CODE.GS` for `checkSession` and `getFile` (question downloads). |
-| **`chapters-data.js`** | Pure data: levels → chapters → **books** → subtopics, and their Google Drive file IDs (4 levels deep — see §4). The only file you edit to add/rename/remove chapters, books, or question sets — see the big comment block at the top of the file itself for step-by-step instructions. | None — pure data map, no logic. |
-| **`quiz.js`** | ⚠️ **Not used.** Not referenced by any HTML file, and incompatible with the current app (duplicate `QUIZ`/`REV` names, calls `DATA.*` methods that don't exist in `app.js`). Currently a deprecation-notice stub. Safe to delete. | — |
-| **`CODE.GS`** | Backend: all `action=...` endpoints (`login`, `signup`, `checkSession`, `submitPayment`, `getSettings`, `getFile`, and the `admin*` actions), user/payment storage in Google Sheets, password hashing. | Google Sheets (`Users`, `Payments`, `Settings`), Google Drive (for `getFile` and payment screenshots). |
-| **`manifest.json`** | PWA metadata (name, icons, theme color, start URL) — lets the app be "installed" to a home screen. | Referenced by `user.html`'s `<link rel="manifest">`. |
-| **`sw.js`** | Service worker: caches the app shell for offline use (stale-while-revalidate), and Drive/API responses (network-first with offline fallback). It does **not** currently send or handle any timetable-alarm notifications — the Timetable feature itself works, but there's no push/local-notification wiring yet (see "Known gaps" in §7). | Registered by `PWA.init()` in `app.js`. |
+1. **Landing (`index.html`)** — a new visitor signs up with username/email/mobile/password. The backend (`handleSignup` in `CODE.GS`) creates a row in the `Users` sheet and starts a 24-hour trial clock (`TRIAL_HOURS`).
+2. **Trial period** — for 24 hours, the user has full access to `user.html` (the study app) with `access.level = 'trial'`.
+3. **Trial expiry / payment** — once the trial ends, `index.html` shows a payment screen: a QR code (configurable by the admin), a field for the transaction ID, and a screenshot upload. Submitting this calls `submitPayment`, which writes a row to the `Payments` sheet and sets the user's status to `payment_pending`.
+4. **Admin review (`admin.html`)** — an admin logs into the separate admin panel, sees the pending payment under "Payments," and approves or rejects it (`adminReviewPayment`).
+   - **Approved** → the user's access becomes `permanent`.
+   - **Rejected** → the user's status resets to `expired`, and `index.html` shows a "please pay again" screen along with their previously submitted TXN ID/date (`getPaymentStatus`) rather than generic copy.
+5. **Ongoing use (`user.html`)** — once access is `trial`, `permanent`, this page loads the actual study app: browsing chapters, taking quizzes/exams, tracking progress, managing bookmarks, using the timetable, and caching content for offline use.
+6. **Session verification** — every time `user.html` loads, `app.js`'s `AUTH` module re-validates the session against the backend (`checkSession`) rather than trusting the local copy indefinitely, so a revoked or expired account is caught even if `localStorage` still has stale data.
+7. **Offline** — if the device goes offline, cached question sets and previously loaded UI keep working thanks to the service worker (`sw.js`) and an IndexedDB-backed question cache (`QDB` in `app.js`); only network-dependent actions (login check, downloading new question sets) are blocked until connectivity returns.
+
+---
+
+## 4. File-by-file reference
+
+| File | Role |
+|---|---|
+| **`index.html`** | **Gateway.** Signup, login, the 24-hour trial countdown, the payment flow (QR + TXN ID + screenshot), and routing into `user.html` or `admin.html`. Owns the `hau_session` schema — it's the only file that writes it. Talks directly to `CODE.GS`; loads no other local JS file. |
+| **`user.html`** | **The study app shell.** All HTML structure and CSS for every in-app view: home dashboard, quiz/exam screens, bookmarks, timetable, offline cache manager, settings, etc. Loads `chapters-data.js`, then `app.js`, then a small inline `<script>` "patch layer" at the bottom that wires up search links, swipe gestures, bottom-nav behavior, and the PWA install button. |
+| **`app.js`** | **All application logic.** ~2,400+ lines covering: session gating, the quiz engine (flashcard mode + timed exam mode), bookmarks/flags/wrong-answer bank, progress tracking, streaks, the timetable, the offline cache manager, data export/import, and PWA registration. This is the file you touch for almost any feature change. Reads its data model from `chapters-data.js` and talks to `CODE.GS` for `checkSession` and `getFile` (question-set downloads). |
+| **`chapters-data.js`** | **Pure content data** — no logic. Maps `Level → Chapter → Book → Subtopic → Google Drive file ID`, four levels deep. This is the only file you edit to add, rename, or remove chapters, books, or question sets. Has a large instructional comment block at the top for exactly how to do that. |
+| **`admin.html`** | **Admin panel.** List/search users, approve or reject pending payments, edit global settings (payment amount, QR image, contact info, instructions), view usage stats, manage admin accounts, view an audit log, and change the admin password. Fully self-contained with its own login gate (`hau_admin`), independent of `index.html`'s session. Talks directly to `CODE.GS`. |
+| **`CODE.GS`** | **Backend — Google Apps Script.** A single script handling every `?action=...` request from all three pages: authentication, signup, session checks, progress sync, payment submission/review, settings, question-file proxying, and the full admin action set. Manages Google Sheets (`Users`, `Payments`, `Settings`, `Logs`, `Admins`, `Progress`) and reads/writes Google Drive for question files and payment screenshots. |
+| **`manifest.json`** | **PWA manifest** — app name, icons, theme colors, start URL, display mode. Lets the app be "installed" to a phone or desktop home screen. Referenced from `user.html`'s `<link rel="manifest">`. |
+| **`sw.js`** | **Service worker.** Caches the app shell for offline use (stale-while-revalidate) and Drive/API responses (network-first with an offline fallback). Registered by `PWA.init()` in `app.js`. It does **not** currently handle push or local notifications — see [Known gaps](#7-known-gaps--roadmap). |
+| **`icon-192.png` / `icon-512.png`** | App icons used by the PWA manifest for home-screen/install icons at two resolutions. |
 
 ### Quick "which file do I touch?" guide
 
 | I want to... | Edit this file |
 |---|---|
-| Add/rename a chapter, book, level, or question-file link | `chapters-data.js` **only** |
-| Change how a quiz session behaves (timer length, question limit, shuffle, retry logic, exam auto-submit, scoring, results screen) | `app.js` → section `9. QUIZ ENGINE` |
-| Add a new quiz mode (e.g. "timed sprint", "matching game") | `app.js` → new module alongside `QUIZ`/`PSY`, plus matching HTML in `user.html` |
-| Change bookmarks / flags / wrong-bank behavior | `app.js` → section `8. REVIEW LISTS` |
-| Change trial length, payment flow, or login/signup validation | `CODE.GS` (`TRIAL_HOURS`, `handleSignup`, `handleLogin`) **and** `index.html` (form/validation) |
-| Change what happens when a session expires or how offline access is judged | `app.js` → section `4. AUTH` **and** `index.html`'s matching logic (keep both in sync — see §5) |
-| Change the dashboard, streaks, or progress stats | `app.js` → sections `10a`–`10c` |
-| Change the timetable or its alarms | `app.js` → section `10d` |
-| Change offline caching behavior | `app.js` → section `10e`, and `sw.js` for the underlying cache strategy |
-| Change visual styling of the study app | `user.html` `<style>` block (CSS variables at the top control the whole theme) |
-| Change visual styling of login/payment screens | `index.html` `<style>` block |
-| Change admin panel behavior | `admin.html` (self-contained, doesn't touch `app.js`) |
-| Add a brand-new top-level view (like a new sidebar tab) | HTML section in `user.html`, sidebar link in `user.html`, a new module in `app.js`, and a case in `UI._goRaw()`'s view-switch |
+| Add/rename a chapter, book, level, or question-file link | `chapters-data.js` only |
+| Change quiz behavior (timer, question limit, shuffle, retry logic, exam auto-submit, scoring, results screen) | `app.js` → `QUIZ` module |
+| Add a new quiz mode | `app.js` → new module alongside `QUIZ` / `PSY`, plus matching HTML in `user.html` |
+| Change bookmarks / flags / wrong-answer bank behavior | `app.js` → `REV` module |
+| Change trial length, payment flow, or login/signup validation | `CODE.GS` (`TRIAL_HOURS`, `handleSignup`, `handleLogin`) **and** `index.html` (form/validation) — keep both in sync |
+| Change how session expiry / offline access is judged | `app.js` → `AUTH` module **and** `index.html`'s matching logic |
+| Change the dashboard, streaks, or progress stats | `app.js` → `PROG` / `STREAK` / `HOME` modules |
+| Change the timetable | `app.js` → `TT` module |
+| Change offline caching behavior | `app.js` → `CACHE` module and `QDB`, plus `sw.js` for the underlying cache strategy |
+| Change study-app visual styling | `user.html` `<style>` block (CSS variables at the top control the whole theme) |
+| Change login/payment screen styling | `index.html` `<style>` block |
+| Change admin panel behavior | `admin.html` (self-contained) |
+| Add a brand-new top-level view/tab | HTML section + sidebar link in `user.html`, a new module in `app.js`, and a case in `UI._goRaw()`'s view switch |
 
 ---
 
-## 4. Adding question content (no code changes needed)
+## 5. `app.js` module map
 
-As of this update, content is organized **4 levels deep**:
+`app.js` is organized into clearly named modules (each a top-level `const`):
+
+| Module | Responsibility |
+|---|---|
+| `APP_CONFIG` / `LS` / `S` | Backend URL config, localStorage key names, and the in-memory app state object |
+| `QDB` | IndexedDB-backed cache for downloaded question sets (chosen over localStorage because localStorage is capped around 5–10 MB per origin, easy to exceed once a student caches a large content library) |
+| `NETCHECK` | Lightweight connectivity probing (separate from the browser's `navigator.onLine`, which can be unreliable) |
+| `AUTH` | Session gate — validates `hau_session` against the backend, builds the effective access level (`trial` / `permanent` / `expired` / `pending_review` / `unknown`) |
+| `PSYNC` | Background sync of local data (progress, bookmarks, streaks) back to the server |
+| `PWA` | Service worker registration and install-prompt handling |
+| `UI` | Core view-routing / navigation (`_goRaw()` switches between top-level views) |
+| `ON` | "Online Study" — the four-level cascading dropdown browser (Level → Chapter → Book → Subtopic) |
+| `LOC` | Local/offline question-set access helpers |
+| `PSY` | "Psycho Mode" — a rapid-fire quiz mode pulling from an entire chapter across all its books |
+| `REV` | Review lists: bookmarks, flags, and the wrong-answer bank |
+| `QUIZ` | The core quiz/exam engine — flashcard and timed-exam modes, scoring, results, Daily Challenge |
+| `PROG` | Progress tracking and stats |
+| `STREAK` | Daily study-streak tracking |
+| `HOME` | Home dashboard rendering |
+| `TT` | Timetable — creating and viewing weekly study sessions |
+| `CACHE` | Offline cache manager UI/logic |
+| `DATA` | Data export/import |
+| `TUTORIAL` | First-run/onboarding walkthrough |
+| `APP` | Boot sequence — ties everything together on page load |
+| `NET` | Network-aware fetch wrapper used throughout the app |
+
+---
+
+## 6. Content model (how question sets are organized)
+
+Content is structured **four levels deep**:
 
 ```
 Level (level5 / level7 / gk / old_question)
   └─ Chapter (e.g. "7": "Building Construction Technology")
-       └─ Book (the author/source a question set came from, e.g. "Sunil Sah", "DPARSAD", "GATE")
-            └─ Subtopic (the question range/label, e.g. "1-100") → Google Drive fileId
+       └─ Book (the source/author a question set came from, e.g. "Sunil Sah", "DPARSAD", "GATE")
+            └─ Subtopic (a question range/label, e.g. "1–100") → Google Drive file ID
 ```
 
-Online Study in `user.html` shows this as four cascading dropdowns: **Level → Chapter → Book → Subtopic**.
+`user.html`'s Online Study view exposes this as **four cascading dropdowns**: Level → Chapter → Book → Subtopic.
 
-To add a new question set:
-1. Upload your question JSON to Google Drive → Share → "Anyone with the link".
+### Adding a new question set (no code changes needed)
+
+1. Upload the question JSON to Google Drive → Share → "Anyone with the link."
 2. Copy the file ID from the share link.
-3. Open `chapters-data.js`, find the right `level` → chapter number → book name in the `DRIVE` object, and add `"Your Subtopic Label": "fileId"` under it.
-   - Adding a brand-new book to an existing chapter? Add a new key at the book level, e.g. `"New Author": { "1-100": "fileId" }`.
-   - If a book only has one file total, use `"All"` as the subtopic label (this is how single-file books like `GATE` and `DPARSAD` in the `gk` level are set up).
-4. New chapter or level? Follow the instructions in `chapters-data.js`'s own header comment.
+3. Open `chapters-data.js`, find the right `level → chapter → book` in the `DRIVE` object, and add `"Your Subtopic Label": "fileId"`.
+   - New book in an existing chapter → add a new key at the book level, e.g. `"New Author": { "1-100": "fileId" }`.
+   - Book has only one file total → use `"All"` as the subtopic label (as `GATE` and `DPARSAD` do).
+4. New chapter or level → follow the step-by-step instructions in `chapters-data.js`'s own header comment.
 
-Expected question JSON shape (flexible — `normQ()` in `app.js` accepts several variants):
+### Expected question JSON shape
+
 ```json
 [
   {
@@ -122,44 +178,111 @@ Expected question JSON shape (flexible — `normQ()` in `app.js` accepts several
   }
 ]
 ```
+`normQ()` in `app.js` is deliberately flexible and accepts a few variants of this shape.
 
-**Note on the `ChapterData` helper API** (used throughout `app.js`):
-- `ChapterData.chapters(lv)` — chapter list for a level (unchanged)
-- `ChapterData.books(lv, ch)` — book list for a chapter (**new**)
-- `ChapterData.files(lv, ch, book)` — subtopic→fileId map for one book (now takes a `book` argument)
-- `ChapterData.fileCount(lv, ch)` — usable file count across *all* books in a chapter; pass a 3rd `book` argument to count just that book
-- `ChapterData.chapterFileRefs(lv, ch)` — flat `{lv,ch,book,subtopic,name,fid,key}` list for one chapter, across all its books (**new** — used by Psycho Mode)
-- `ChapterData.allFileRefs()` — same flat shape across the *entire* dataset (used by Daily Challenge and Offline Cache) — unchanged in shape, so nothing downstream needed to change
+### `ChapterData` helper API (used throughout `app.js`)
 
----
-
-## 5. Things to keep in sync across files (important!)
-
-- **`GAS_URL` / `APP_CONFIG.APPS_URL`** — must be identical in `index.html`, `admin.html`, `app.js`.
-- **`hau_session` shape** — `index.html` writes `{ type, username, name, email, mobile, token, access:{level, trialExpiresAt, permanent}, settings, lastVerified }`. `app.js`'s `AUTH` module reads/writes this exact shape. If you change one, change the other.
-- **Access-level rules** (`permanent` / `trial` / `expired` / `pending_review` / `unknown`) — computed independently in `index.html`'s `handleUserAuth()` and `app.js`'s `AUTH._buildSession()`. They're written to mirror each other; if you change what counts as valid access in one, update the other the same way.
-- **Offline cache keys** — `ON.onBook()` (Online Study), `PSY.start()` (Psycho Mode), and `CACHE`/`QUIZ.daily()` (via `ChapterData.allFileRefs()`) must all build the identical key string for the same file, or a set cached from one screen won't show as cached on another. The format is `` `${level}_${chapter}_${book}_${subtopic}` `` — generated in one place (`ChapterData.chapterFileRefs()`/`allFileRefs()`) and read consistently everywhere else, so this shouldn't need manual attention unless you're hand-writing a new call site.
-- **Global settings (payment amount/QR/contact/instructions)** — saved via `admin.html` → `adminUpdateSettingsBatch` → the `Settings` sheet, and read by `index.html` via `getSettings`. `index.html`'s `loadPaymentUI()` re-fetches live settings every time it's online (see fix in §6) — don't reintroduce a "skip fetch if already cached" shortcut here, or admin changes will stop propagating to browsers that already have a stale cached copy.
+- `ChapterData.chapters(lv)` — chapter list for a level
+- `ChapterData.books(lv, ch)` — book list for a chapter
+- `ChapterData.files(lv, ch, book)` — subtopic → file ID map for one book
+- `ChapterData.fileCount(lv, ch[, book])` — usable (non-empty) file count across all books in a chapter, or just one book
+- `ChapterData.chapterFileRefs(lv, ch)` — flat `{lv, ch, book, subtopic, name, fid, key}` list for one chapter, used by Psycho Mode
+- `ChapterData.allFileRefs()` — the same flat shape across the entire dataset, used by Daily Challenge and Offline Cache
 
 ---
 
-## 6. Changelog (this pass)
+## 7. Backend (`CODE.GS`) — actions and data model
 
-- **Fixed:** `app.js` had a leftover `window.SB = SB;` line referencing a module that was already removed, throwing an uncaught `ReferenceError` on every page load and silently skipping the `window.*` exposure of every module declared after it (`ON`, `LOC`, `PSY`, `REV`, `QUIZ`, `PWA`, `PROG`, `HOME`, `STREAK`, `TT`, `CACHE`, `DATA`, `APP`). Functionality was unaffected (everything else is reached via bare identifiers, not `window.*`), but it polluted the console and left those aliases missing. Removed the line and updated the stale section-index comment at the top of the file.
-- **Fixed:** `index.html`'s `loadPaymentUI()` only fetched live settings from the backend when the local cache was completely empty (`Object.keys(s).length===0`). Once any browser had cached a settings snapshot even once, it would never re-fetch — so changes made in `admin.html` (from any device, including the same one) silently stopped reaching users who'd already been through the trial/payment screen before. Now it always fetches fresh settings while online and only falls back to the cached copy when offline.
-- **Fixed:** `ChapterData.fileCount()` used to count *keys*, not truthy file IDs — so chapters whose only entries were empty-string placeholders (e.g. the `old_question` PSC sets, or `gk`'s `DPARSAD` books) showed up as having content instead of "(coming soon)". It now only counts entries with a real file ID.
-- **Added:** a **Book** layer between Chapter and Subtopic (`Level → Chapter → Book → Subtopic`), matching what was already implicit in the data (every old label like `"Sunil Sah 1-100"` was really `Book="Sunil Sah", Subtopic="1-100"` mashed into one string). `chapters-data.js` was restructured accordingly (auto-migrated from the old flat labels — verified zero file IDs lost), `ON` (Online Study) gained a 4th cascading dropdown, and `PSY` (Psycho Mode) was updated to use the new `ChapterData.chapterFileRefs()` helper instead of assuming a flat file map. Daily Challenge and Offline Cache needed no changes — they already consumed the generic `ChapterData.allFileRefs()` shape.
-  - **Migration note:** cache keys now include the book name (`${level}_${chapter}_${book}_${subtopic}` instead of `${level}_${chapter}_${label}`). Anyone who already downloaded an offline pack under the old key format will see it as "not cached" once and need to re-download it — no data is lost, it's just a one-time re-sync.
+The backend is a **single Google Apps Script Web App** exposing everything through one `/exec` URL and an `action` query parameter (`doGet`/`doPost` both route to the same switch statement).
+
+### Google Sheets used as the database
+- **`Users`** — accounts, credentials, trial/access state, login-attempt lockout tracking
+- **`Payments`** — submitted payment records (TXN ID, screenshot reference, review status)
+- **`Settings`** — key/value store for admin-editable global config (payment amount, QR image, contact info, trial hours, etc.)
+- **`Logs`** — admin audit log
+- **`Admins`** — admin accounts (separate from `Users`)
+- **`Progress`** — server-side backup/sync of each user's local progress data
+
+### Available actions
+
+| Category | Actions |
+|---|---|
+| Health | `ping` |
+| Auth / session | `login`, `signup`, `checkSession`, `saveProgress`, `getProgress` |
+| Payment | `submitPayment`, `getPaymentStatus`, `getSettings`, `getFile` |
+| Admin | `adminLogin`, `adminChangePassword`, `adminListAdmins`, `adminCreateAdmin`, `adminDeleteAdmin`, `adminListUsers`, `adminListPayments`, `adminReviewPayment`, `adminGrantAccess`, `adminUpdateUser`, `adminDeleteUser`, `adminDeletePayment`, `adminUpdateSettings`, `adminUpdateSettingsBatch`, `adminStats`, `adminListLogs` |
+
+### Notable backend behavior
+- **`TRIAL_HOURS`** (default 24) controls the free-trial length, overridable via the `Settings` sheet.
+- **Login lockout** — `MAX_LOGIN_ATTEMPTS` (5) and `LOCKOUT_MINUTES` (15) throttle brute-force attempts.
+- **`setup()`** is an idempotent one-time function you run manually in the Apps Script editor to create every sheet, seed the first admin account, and initialize default settings.
+- **First admin account** — seeded from `ADMIN_SEED_USERNAME` / `ADMIN_SEED_PASSWORD` in `CODE.GS`; change the seed password immediately after first login (or create a new admin and delete the seed one).
+- **`APP_VERSION`** is defined independently in both `CODE.GS` and `app.js` (surfaced via the `ping` action and the user.html sidebar footer respectively) — bump both by hand together on release.
 
 ---
 
-## 7. Known gaps / things to revisit
+## 8. Deployment — getting it running (no build step)
 
-- ~~Payment-pending vs. never-paid look identical to the user.~~ **Fixed.** `handleUserAuth()` (`index.html`) and `AUTH._buildSession()` (`app.js`) now check `user.status === 'payment_pending'` and set a distinct `access.level = 'pending_review'` instead of collapsing it into `'expired'`. That routes to the existing `form-status` screen, which now also calls `getPaymentStatus` to show the actual submitted TXN ID and date instead of generic copy. A rejected payment still correctly falls back to `'expired'` (the backend already resets `user.status` to `'expired'` on rejection), so the "please pay again" screen only shows when it's genuinely needed.
-- **No timetable alarm/notification wiring.** The Timetable feature (add/view weekly study sessions) works fully, but there's no push notification or local alarm firing at the scheduled time — `sw.js` has no `message`/notification handling, and `app.js` has no `Notification`/alarm-scheduling code. This would need to be built from scratch if it's wanted (likely via the Notifications API + a scheduled check in the service worker or a `setTimeout`-based approach while the tab is open).
+1. **Deploy the backend:**
+   - Open [script.google.com](https://script.google.com), create a new project, and paste in `CODE.GS`.
+   - Change `ADMIN_SEED_PASSWORD` away from the default before deploying.
+   - Run `setup()` once from the Apps Script editor to create the Sheets and seed the first admin.
+   - Deploy → New deployment → Web app → Execute as "Me" → Who has access "Anyone."
+   - Copy the resulting `.../exec` URL.
+2. **Wire the frontend to it** — paste that URL into all three places:
+   - `index.html` → `const GAS_URL = "..."`
+   - `admin.html` → `const GAS_URL = "..."`
+   - `app.js` → `APP_CONFIG.APPS_URL`
+3. **Host the static files** — any static host works (GitHub Pages, Netlify, Firebase Hosting), or open `index.html` locally for testing. Note: the service worker / PWA install only works over HTTPS or `localhost`.
+4. **Content** — upload question-set JSON files to Google Drive (shared "Anyone with the link") and register their file IDs in `chapters-data.js` as described in [§6](#6-content-model-how-question-sets-are-organized).
+5. Log into `admin.html` with the seeded admin credentials, change the password immediately, and configure payment settings (amount, QR image, contact info) before going live.
 
 ---
 
-## 8. Full feature list
+## 9. Things that must stay in sync across files
 
-See the chat message alongside this file — every user-facing feature is listed there, grouped by category, for a one-by-one keep/modify/remove review.
+- **`GAS_URL` / `APP_CONFIG.APPS_URL`** — must be identical in `index.html`, `admin.html`, and `app.js`. If you redeploy the Apps Script and get a new URL, update all three.
+- **`hau_session` shape** — `index.html` writes `{ type, username, name, email, mobile, token, access:{level, trialExpiresAt, permanent}, settings, lastVerified }`. `app.js`'s `AUTH` module reads/writes this exact shape — change one side, change the other.
+- **Access-level rules** (`permanent` / `trial` / `expired` / `pending_review` / `unknown`) — computed independently in `index.html`'s `handleUserAuth()` and `app.js`'s `AUTH._buildSession()`. They must be kept logically identical.
+- **Offline cache keys** — built as `` `${level}_${chapter}_${book}_${subtopic}` `` in one place (`ChapterData.chapterFileRefs()` / `allFileRefs()`) and consumed consistently by `ON`, `PSY`, `CACHE`, and `QUIZ.daily()`. A set cached from one screen must appear as cached everywhere else.
+- **Global settings** (payment amount / QR / contact / instructions) — written by `admin.html` via `adminUpdateSettingsBatch`, read by `index.html` via `getSettings`. `index.html`'s `loadPaymentUI()` re-fetches live settings every time it's online — don't reintroduce a "skip fetch if already cached" shortcut, or admin changes will stop reaching users with a stale cached copy.
+- **`APP_VERSION`** — defined separately in `app.js` and `CODE.GS`; bump both together on release.
+
+---
+
+## 10. Known gaps / roadmap
+
+- **No timetable alarm or notification system.** The Timetable feature (add/view weekly study sessions) works fully, but nothing fires a reminder at the scheduled time — `sw.js` has no notification handling, and `app.js` has no `Notification`/alarm-scheduling code. Building this would require the Notifications API plus either a scheduled check inside the service worker or a `setTimeout`-based approach while the tab is open.
+
+---
+
+## 11. Feature summary
+
+**Gateway (`index.html`)**
+- Signup / login
+- 24-hour free trial with live countdown
+- Manual payment submission (QR + transaction ID + screenshot)
+- Payment status screen (pending / rejected, with resubmission)
+
+**Study App (`user.html` + `app.js`)**
+- Home dashboard with progress overview
+- Online Study — four-level cascading content browser
+- Flashcard-style review and timed exam modes
+- Psycho Mode — rapid quiz across a whole chapter
+- Daily Challenge
+- Bookmarks, flags, and a wrong-answer bank
+- Progress tracking and daily streaks
+- Personal weekly timetable
+- Offline content caching (IndexedDB-backed) for use without a network connection
+- Data export/import
+- Installable PWA with offline app-shell caching
+- First-run tutorial/onboarding
+
+**Admin Panel (`admin.html`)**
+- Independent admin login
+- User list/search and management
+- Payment review (approve/reject) with audit trail
+- Global settings management (price, QR, contact info)
+- Usage statistics
+- Admin account management
+- Action log viewer
