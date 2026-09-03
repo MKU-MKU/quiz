@@ -237,7 +237,7 @@ const DRIVE = {
       "DPARSAD": { "All": "" }
     },
     "10": {
-      "GATE": { "Part1": "1Gzu0Or4R4TufdNbRAfIvuWsstiNRJzJ3","Part2": "1ZDd-x9LRPJQYyGArUPk6ZmDN8rPX--_h" },
+      "GATE": { "Part1": "1Gzu0Or4R4TufdNbRAfIvuWsstiNRJzJ3","Part2": "1pqYGgBageMaEsa6QZoCcqzpjr1Bpd3DA" },
       "DPARSAD": { "All": "" }
     },
     "11": {
